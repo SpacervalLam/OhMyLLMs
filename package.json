@@ -1,0 +1,11 @@
+{
+  "name": "llm-vs-capital",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test tests/engine.test.mjs",
+    "check": "node --check dist/game.js && node --check dist/engine.js && node --check dist/data.js"
+  }
+}
