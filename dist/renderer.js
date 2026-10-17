@@ -14,7 +14,13 @@ export async function loadArtwork(){
  const [models,ceos,entries]=await Promise.all([loadImage('assets/models.png'),loadImage('assets/ceos.png'),
   Promise.all(ANIMATED_CHARACTERS.map(async id=>{const image=await loadImage(`assets/animations/${id}.png`);return [id,image?makeSpriteAtlas(image,manifest?.characters[id]):null];}))]);
  const animations=Object.fromEntries(entries);
- return {models,ceos,animations,missingAnimations:ANIMATED_CHARACTERS.filter(id=>!animations[id])};
+ const walkEntries=await Promise.all(CEOS.map(async({id})=>{
+  const [image,layout]=await Promise.all([loadImage(`assets/animations/walk/${id}.png`),fetch(`assets/animations/walk/${id}.json`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+  const atlas=image&&layout?makeSpriteAtlas(image,layout):null;
+  if(animations[id])animations[id].walk=atlas;
+  return [id,atlas];
+ }));
+ return {models,ceos,animations,missingAnimations:[...ANIMATED_CHARACTERS.filter(id=>!animations[id]),...walkEntries.filter(([,atlas])=>!atlas).map(([id])=>`${id}:walk`)]};
 }
 export class GardenRenderer{
  constructor(canvas,art){

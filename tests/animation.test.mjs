@@ -4,7 +4,20 @@ import {readFileSync} from 'node:fs';
 import {GardenGame} from '../dist/engine.js';
 import {MODELS,CEOS} from '../dist/data.js';
 import {ANIMATED_CHARACTERS,ANIMATION_STATES,playAnimation,advanceAnimation,animationFrame,sheetFrameRect} from '../dist/animation.js';
+import {drawAtlasSprite} from '../dist/sprite-atlas.js';
 const tick=(game,seconds)=>{for(let n=0;n<Math.ceil(seconds*60);n++)game.update(1/60);};
+
+test('CEO walking visits both rows of the replacement sheet and attacks retain the original atlas',()=>{
+ const calls=[],ctx={globalAlpha:1,save(){},restore(){},drawImage(...args){calls.push(args);}};
+ const pose=(x,y)=>({x,y,w:20,h:40,anchorX:10});
+ const walk={image:{},columns:3,referenceHeight:40,frames:[[pose(0,0),pose(20,0),pose(40,0)],[pose(0,40),pose(20,40),pose(40,40)]]};
+ const atlas={image:{naturalWidth:120,naturalHeight:200},referenceHeight:40,walk,frames:Array.from({length:5},(_,r)=>Array.from({length:6},(_,c)=>pose(c*20,r*40)))};
+ for(let i=0;i<6;i++)drawAtlasSprite(ctx,atlas,{state:'walk',time:(i+.1)/9},100,100,80);
+ assert.deepEqual(calls.map(c=>c.slice(1,3)),[[0,0],[20,0],[40,0],[0,40],[20,40],[40,40]]);
+ assert.ok(calls.every(c=>c[0]===walk.image));
+ drawAtlasSprite(ctx,atlas,{state:'attack',time:0},100,100,80);
+ assert.equal(calls[6][0],atlas.image);assert.equal(calls[6][2],80);
+});
 
 test('all nine models and six CEOs have a dedicated animation sheet identity',()=>{
  assert.equal(ANIMATED_CHARACTERS.length,15);
@@ -74,5 +87,20 @@ test('all shipped sheets contain 30 calibrated source rectangles within their ac
   assert.equal(png.readUInt32BE(16),layout.width,id);assert.equal(png.readUInt32BE(20),layout.height,id);
   assert.equal(layout.frameCount,30);assert.equal(layout.frames.length,5);assert.ok(layout.referenceHeight>0);
   for(const row of layout.frames){assert.equal(row.length,6);for(const frame of row){assert.ok(frame.x>=0&&frame.y>=0&&frame.w>0&&frame.h>0);assert.ok(frame.x+frame.w<=layout.width&&frame.y+frame.h<=layout.height);assert.ok(Number.isFinite(frame.anchorX));}}
+ }
+});
+
+test('all six CEOs ship six calibrated replacement walk frames',()=>{
+ for(const {id} of CEOS){
+  const base=new URL(`../dist/assets/animations/walk/${id}`,import.meta.url);
+  const png=readFileSync(new URL(`${base.href}.png`)),layout=JSON.parse(readFileSync(new URL(`${base.href}.json`),'utf8'));
+  assert.equal(layout.width,png.readUInt32BE(16),id);assert.equal(layout.height,png.readUInt32BE(20),id);
+  assert.equal(layout.columns,3);assert.equal(layout.rows,2);assert.equal(layout.frames.flat().length,6);
+  assert.ok(layout.referenceHeight>0);
+  for(const frame of layout.frames.flat()){
+   assert.ok(frame.x>=0&&frame.y>=0&&frame.w>0&&frame.h>0,id);
+   assert.ok(frame.x+frame.w<=layout.width&&frame.y+frame.h<=layout.height,id);
+   assert.ok(Number.isFinite(frame.anchorX));
+  }
  }
 });

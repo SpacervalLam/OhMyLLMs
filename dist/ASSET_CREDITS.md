@@ -53,3 +53,7 @@ The battle-model atlas is an AI-assisted adaptation of the credited community re
 - 动作图集及其衍生作品采用 **CC BY-NC-SA 4.0**。
 
 These AI-assisted animation adaptations preserve the credited character identities while adding independently drawn poses for five animation states. LLM sheets derive from the attributed community references; CEO sheets derive from this project's generated caricatures. The animation artwork is shared under CC BY-NC-SA 4.0 with the same upstream attribution requirements.
+
+## CEO 交替步态修订（2026-10-17）
+
+`dist/assets/animations/walk/` 中六张 3×2 透明图集由内置 imagegen 工具重画，以原 CEO 动作图集为参考，分别绘制近腿／远腿交替领步、支撑与摆动。实战行走改用这些独立六帧图集；待机、攻击、受击、退场仍沿用原图。各 JSON 仅记录裁切坐标。以上衍生素材仍依 CC BY-NC-SA 4.0 共享。出战卡牌和图鉴使用原静态海报。

@@ -1,8 +1,6 @@
 import { MODELS, MODEL_MAP, CEOS, COPY, localized } from './data.js';
 import { GardenGame, FIELD } from './engine.js';
 import { GardenRenderer, loadArtwork } from './renderer.js';
-import {ANIMATION_STATES,animationFrame} from './animation.js';
-import {drawAtlasSprite,previewAnimation} from './sprite-atlas.js';
 
 const icons={
  leaf:'<path d="M5 14C5 7 11 4 21 4c0 10-4 16-11 16-3 0-5-3-5-6Z"/><path d="m6 19 10-10"/>',
@@ -31,15 +29,9 @@ function save(key,value){try{localStorage.setItem('garden-'+key,JSON.stringify(v
 let lang=stored('lang','zh');if(!COPY[lang])lang='zh';
 let difficulty=stored('difficulty','normal');if(!['easy','normal','hard'].includes(difficulty))difficulty='normal';
 let eggs=stored('eggs',true),sound=stored('sound',false),speed=1,selected='deepseek',view='garden',dexTab='models';
-let galleryState='idle',galleryPaused=false,galleryTime=0,uiPlayers=[];
 let game=new GardenGame({lang,difficulty,eggs}),art=null,renderer=null,ready=false,modalPaused=false,tipIndex=0,lastTip=0,lastFrame=0,hudTimer=0,best=stored('best',0),lastPhase='ready';
 const app=document.getElementById('app'),modal=document.getElementById('modal');
 const t=()=>COPY[lang];
-const motionCopy={
- zh:{label:'动作预览',count:'每位 30 帧 · 5 种动作',pause:'暂停预览',resume:'播放预览',prev:'上一帧',next:'下一帧',states:{idle:'待机',special:'技能 / 彩蛋',walk:'行走',attack:'攻击',hurt:'受击',defeat:'退场'}},
- en:{label:'Animation preview',count:'30 frames · 5 actions each',pause:'Pause preview',resume:'Play preview',prev:'Previous frame',next:'Next frame',states:{idle:'Idle',special:'Skill / Easter egg',walk:'Walk',attack:'Attack',hurt:'Hit',defeat:'Defeat'}},
- ja:{label:'モーションプレビュー',count:'各30フレーム・5アクション',pause:'プレビュー停止',resume:'プレビュー再生',prev:'前のコマ',next:'次のコマ',states:{idle:'待機',special:'スキル / 小ネタ',walk:'歩く',attack:'攻撃',hurt:'被弾',defeat:'退場'}}
-};
 let audio=null,lastShotSound=0;
 function playSound(kind){
  if(!sound)return;
@@ -59,7 +51,7 @@ function toast(message,warning=false,extra=''){
 }
 function nav(){return `<header class="topbar"><button class="brand" data-view="garden" aria-label="${t().title}"><span class="brand-mark">${icon('leaf',27)}</span><span><span class="brand-name">LLM <span>vs.</span> CAPITAL</span><span class="brand-caption">A LITTLE GARDEN. A BIG DEFENSE.</span></span></button><nav class="navigation" aria-label="${t().title}"><button class="nav-link ${view==='garden'?'active':''}" data-view="garden">${t().navGame}</button><button class="nav-link ${view==='dex'?'active':''}" data-view="dex">${t().navDex}</button><button class="nav-link" data-view="help">${t().navHelp}</button></nav><div class="top-actions"><button class="icon-btn sound-toggle" title="${sound?t().soundOn:t().soundOff}" aria-label="${sound?t().soundOn:t().soundOff}" aria-pressed="${sound}">${icon(sound?'sound':'mute',15)}</button><div class="lang-switch" aria-label="Language">${[['zh','简中'],['en','EN'],['ja','日本語']].map(([key,label])=>`<button data-lang="${key}" lang="${{zh:'zh-CN',en:'en',ja:'ja'}[key]}" class="${lang===key?'active':''}" aria-pressed="${lang===key}">${label}</button>`).join('')}</div></div></header>`;}
 function footer(){return `<footer class="page-footer"><div class="footer-left">${icon('flower',13)}<span>${t().footer}</span><span class="footer-dot"></span><span>2026</span></div><div class="footer-right"><span class="fan-pill">${t().fanwork}</span><button class="text-btn credits-open">${t().credits} ↗</button></div></footer>`;}
-function modelCards(){return MODELS.map((m,i)=>`<button class="model-card ${m.id===selected?'selected':''}" data-model="${m.id}" title="${m.name} · ${localized(m.skill,lang)} · ${m.cost} Token" aria-label="${m.name}, ${m.cost} Token, ${localized(m.role,lang)}" aria-pressed="${m.id===selected}"><span class="hotkey">${i+1}</span><span class="model-thumb animated-thumb" style="--character-color:${m.color}"><canvas width="180" height="180" data-animation-id="${m.id}" data-mode="card" aria-hidden="true"></canvas></span><span class="card-name">${m.name}</span><span class="card-cost"><i class="tiny-coin"></i>${m.cost}</span><span class="card-cooldown" hidden></span></button>`).join('');}
+function modelCards(){return MODELS.map((m,i)=>`<button class="model-card ${m.id===selected?'selected':''}" data-model="${m.id}" title="${m.name} · ${localized(m.skill,lang)} · ${m.cost} Token" aria-label="${m.name}, ${m.cost} Token, ${localized(m.role,lang)}" aria-pressed="${m.id===selected}"><span class="hotkey">${i+1}</span><span class="model-thumb" style="background-image:url('assets/portraits/${m.id}.png')"></span><span class="card-name">${m.name}</span><span class="card-cost"><i class="tiny-coin"></i>${m.cost}</span><span class="card-cooldown" hidden></span></button>`).join('');}
 function detail(){
  if(selected==='shovel')return `<div class="detail-label">${t().skillLabel}<span>S</span></div><div class="detail-skill">${icon('shovel',14)}${t().shovel}</div><p class="detail-desc">${t().shovelHint}</p>`;
  const m=MODEL_MAP[selected]||MODELS[0];return `<div class="detail-label">${t().skillLabel}<span>${localized(m.role,lang)}</span></div><div class="detail-skill"><span style="color:${m.color}">${icon(m.id==='deepseek'?'coin':m.id==='qwen'?'shield':m.id==='kimi'?'heart':m.id==='claude'?'book':'star',14)}</span>${localized(m.skill,lang)}</div><p class="detail-desc">${localized(m.desc,lang)}</p>`;
@@ -68,12 +60,9 @@ function gameMarkup(){return `<section class="page-intro"><div><div class="eyebr
 function dexMarkup(){
  const list=dexTab==='models'?MODELS:CEOS;
  const subtitle=localized({zh:'九种技能，九种脾气。找到属于你的守园阵容。',en:'Nine abilities. Nine personalities. Find your garden crew.',ja:'9つのスキル、9つの個性。自分だけの防衛チームを。'},lang);
- const motion=motionCopy[lang],states=['idle',dexTab==='models'?'special':'walk','attack','hurt','defeat'];
- if(!states.includes(galleryState))galleryState=states[1];
- const portrait=m=>`<figure class="dex-art animated-art" style="--character-color:${m.color}"><canvas class="dex-animation" width="360" height="420" data-animation-id="${m.id}" data-mode="gallery" role="img" aria-label="${m.name} · ${motion.states[galleryState]}"></canvas><figcaption><span class="preview-state">${motion.states[galleryState]}</span><span class="frame-counter">01 / 06</span></figcaption></figure>`;
+ const portrait=m=>dexTab==='models'?`<div class="dex-art" role="img" aria-label="${m.name}" style="background-image:url('assets/portraits/${m.id}.png')"></div>`:`<div class="ceo-art" role="img" aria-label="${m.name}"><span class="atlas-sprite" style="background-position:${m.index%3*50}% ${Math.floor(m.index/3)*100}%"></span></div>`;
  return `<section class="dex-intro"><div class="eyebrow">${t().fanwork}</div><h1>${dexTab==='models'?t().allNine:t().ceoTitle}</h1><p>${dexTab==='models'?subtitle:t().fiction}</p></section>
  <div class="dex-tabs"><button class="dex-tab ${dexTab==='models'?'active':''}" data-dex="models">${t().models} <small>09</small></button><button class="dex-tab ${dexTab==='enemies'?'active':''}" data-dex="enemies">${t().enemies} <small>06</small></button></div>
- <div class="animation-toolbar"><label for="animation-state">${icon('play',14)} ${motion.label}</label><select id="animation-state" class="animation-select">${states.map(state=>`<option value="${state}" ${galleryState===state?'selected':''}>${motion.states[state]}</option>`).join('')}</select><button class="tool-btn" id="preview-prev" title="${motion.prev}" aria-label="${motion.prev}"><span class="frame-prev">${icon('arrow',13)}</span></button><button class="tool-btn" id="preview-toggle" aria-pressed="${galleryPaused}">${icon(galleryPaused?'play':'pause',14)}<span>${galleryPaused?motion.resume:motion.pause}</span></button><button class="tool-btn" id="preview-next" title="${motion.next}" aria-label="${motion.next}">${icon('arrow',13)}</button><span class="animation-count">${motion.count}</span></div>
  <section class="dex-grid">${list.map(m=>dexTab==='models'?`<article class="dex-card">${portrait(m)}<div class="dex-info"><span class="dex-role">${localized(m.role,lang)}</span><h2>${m.name}</h2><p class="dex-skill">${localized(m.skill,lang)}</p><p class="dex-desc">${localized(m.desc,lang)}</p><div class="dex-stats"><span>${t().cost}<b>${m.cost} T</b></span><span>${t().hp}<b>${m.hp}</b></span><span>${t().cd}<b>${m.cooldown}${t().sec}</b></span></div><div class="dex-quote">“${localized(m.quote,lang)}”</div></div></article>`:`<article class="dex-card">${portrait(m)}<div class="dex-info"><span class="dex-role">${localized(m.title,lang)}</span><h2>${m.name}</h2><p class="dex-desc">${localized(m.desc,lang)}</p><div class="dex-stats"><span>${t().hp}<b>${m.hp}</b></span><span>${t().power}<b>${m.damage}</b></span></div></div></article>`).join('')}</section>`;
 }
 function render(){
@@ -81,7 +70,6 @@ function render(){
  app.innerHTML=`<div class="shell">${nav()}<main>${view==='garden'?gameMarkup():dexMarkup()}</main>${footer()}</div>`;
  renderer=null;
  if(view==='garden'&&art){renderer=new GardenRenderer(document.getElementById('garden'),art);renderer.selection=selected;bindCanvas();}
- uiPlayers=Array.from(document.querySelectorAll('canvas[data-animation-id]'),canvas=>({canvas,ctx:canvas.getContext('2d'),id:canvas.dataset.animationId,mode:canvas.dataset.mode,key:null}));
  bindUI();updateHUD(true);
 }
 function bindUI(){
@@ -98,10 +86,6 @@ function bindUI(){
  document.querySelectorAll('.credits-open').forEach(b=>b.addEventListener('click',showCredits));
  document.querySelectorAll('[data-model]').forEach(b=>b.addEventListener('click',()=>selectModel(b.dataset.model)));
  document.querySelectorAll('[data-dex]').forEach(b=>b.addEventListener('click',()=>{dexTab=b.dataset.dex;render();}));
- document.getElementById('animation-state')?.addEventListener('change',e=>{galleryState=e.target.value;galleryTime=0;for(const p of uiPlayers){p.key=null;const title=p.canvas.closest('article')?.querySelector('h2')?.textContent||p.id;p.canvas.setAttribute('aria-label',`${title} · ${motionCopy[lang].states[galleryState]}`);}document.querySelectorAll('.preview-state').forEach(el=>el.textContent=motionCopy[lang].states[galleryState]);});
- document.getElementById('preview-toggle')?.addEventListener('click',()=>setGalleryPaused(!galleryPaused));
- document.getElementById('preview-prev')?.addEventListener('click',()=>stepGallery(-1));
- document.getElementById('preview-next')?.addEventListener('click',()=>stepGallery(1));
  document.getElementById('main-start')?.addEventListener('click',mainAction);
  document.getElementById('shovel')?.addEventListener('click',()=>selectModel(selected==='shovel'?null:'shovel'));
  document.getElementById('speed')?.addEventListener('click',()=>{speed=speed===3?1:speed+1;document.querySelector('#speed .speed-label').textContent=`${speed}×`;playSound('click');});
@@ -110,14 +94,6 @@ function bindUI(){
  document.getElementById('eggs')?.addEventListener('change',e=>{eggs=e.target.checked;save('eggs',eggs);game.setEggs(eggs);toast(eggs?t().eggOn:t().eggToast);processEvents();});
  document.getElementById('difficulty')?.addEventListener('change',e=>{difficulty=e.target.value;save('difficulty',difficulty);resetGame();});
  document.getElementById('next-wave')?.addEventListener('click',()=>{game.nextWave();processEvents();updateHUD(true);});
-}
-function setGalleryPaused(paused){
- galleryPaused=paused;const b=document.getElementById('preview-toggle');if(!b)return;
- b.setAttribute('aria-pressed',String(paused));b.innerHTML=`${icon(paused?'play':'pause',14)}<span>${paused?motionCopy[lang].resume:motionCopy[lang].pause}</span>`;
-}
-function stepGallery(direction){
- const definition=ANIMATION_STATES[galleryState],frame=animationFrame(previewAnimation(galleryState,galleryTime));
- setGalleryPaused(true);galleryTime=((frame.column+direction+6)%6+.01)/definition.fps;
 }
 function bindCanvas(){
  const canvas=renderer.canvas;
@@ -215,27 +191,9 @@ function loop(now){
  // Fixed-size substeps preserve projectile and one-second mechanics at 3x speed.
  if(ready){let left=dt*speed;while(left>0){const step=Math.min(left,1/60);game.update(step);left-=step;}processEvents();}
  if(renderer)renderer.draw(game,now);
- if(view==='dex'&&!galleryPaused&&!modal.open)galleryTime+=dt;
- drawUIAnimations();
  hudTimer+=dt;if(hudTimer>.1){hudTimer=0;updateHUD();}
  if(now-lastTip>18000){lastTip=now;tipIndex=(tipIndex+1)%t().tips.length;const note=document.getElementById('note-text');if(note)note.textContent=t().tips[tipIndex];}
  requestAnimationFrame(loop);
-}
-function drawUIAnimations(){
- if(!art)return;
- for(const player of uiPlayers){
-  const atlas=art.animations?.[player.id];if(!atlas)continue;
-  const animation=player.mode==='gallery'?previewAnimation(galleryState,galleryTime):{state:'idle',time:game.tickTime+ANIMATION_STATES.idle.frames*player.id.length*.017};
-  const frame=animationFrame(animation),key=`${frame.row}:${frame.column}`;if(player.key===key)continue;player.key=key;
-  const {canvas,ctx}=player;ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(player.mode==='gallery'){
-   const y=canvas.height*.87;ctx.fillStyle='#657b4020';ctx.beginPath();ctx.ellipse(canvas.width/2,y,canvas.width*.24,8,0,0,Math.PI*2);ctx.fill();
-   const size=Math.min(canvas.height*.72,canvas.width*.94*atlas.referenceHeight/(atlas.horizontalExtent||atlas.referenceHeight));
-   drawAtlasSprite(ctx,atlas,animation,canvas.width/2,y,size);
-   const counter=canvas.parentElement.querySelector('.frame-counter');if(counter)counter.textContent=`${String(frame.column+1).padStart(2,'0')} / 06`;
-  }else drawAtlasSprite(ctx,atlas,animation,canvas.width/2,canvas.height*1.1,canvas.height*1.12);
-  canvas.dataset.frame=String(frame.column);canvas.dataset.state=animation.state;
- }
 }
 render();requestAnimationFrame(loop);
 loadArtwork().then(loaded=>{

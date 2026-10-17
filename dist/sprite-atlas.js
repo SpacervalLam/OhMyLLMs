@@ -3,7 +3,7 @@ import {ANIMATION_STATES,SHEET_COLUMNS,SHEET_ROWS,animationFrame,sheetFrameRect}
 export function makeSpriteAtlas(image,layout=null){
  if(layout?.frames&&layout.width===image.naturalWidth&&layout.height===image.naturalHeight){
   const horizontalExtent=Math.max(...layout.frames.flat().map(frame=>Math.max(frame.anchorX,frame.w-frame.anchorX)))*2;
-  return {image,frames:layout.frames,referenceHeight:layout.referenceHeight,horizontalExtent,columns:6,rows:5};
+  return {image,frames:layout.frames,referenceHeight:layout.referenceHeight,horizontalExtent,columns:layout.columns,rows:layout.rows};
  }
  const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0);
@@ -23,6 +23,15 @@ export function makeSpriteAtlas(image,layout=null){
 }
 export function drawAtlasSprite(ctx,atlas,animation,x,baseline,size,{opacity=1,reduced=false}={}){
  if(!atlas)return false;
+ // The corrected walk cycle has its own six drawings in reading order (3 × 2).
+ // Keep using the engine's walk clock so pause, slow and boost stay synchronized.
+ if(animation?.state==='walk'&&atlas.walk){
+  const walk=atlas.walk,index=animationFrame(animation,reduced).column;
+  const source=walk.frames[Math.floor(index/walk.columns)][index%walk.columns],scale=size/walk.referenceHeight;
+  ctx.save();ctx.globalAlpha*=opacity;
+  ctx.drawImage(walk.image,source.x,source.y,source.w,source.h,x-source.anchorX*scale,baseline-source.h*scale,source.w*scale,source.h*scale);
+  ctx.restore();return true;
+ }
  const frame=animationFrame(animation,reduced),cell=sheetFrameRect(atlas.image.naturalWidth,atlas.image.naturalHeight,frame),crop=atlas.crop;
  if(atlas.frames){
   const source=atlas.frames[frame.row][frame.column],scale=size/atlas.referenceHeight;
