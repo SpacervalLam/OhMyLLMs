@@ -40,3 +40,16 @@ These character adaptations are attributed to ApprenTice and the underlying crea
 - `dist/assets/favicon.svg`：本项目原创的叶片图标；草地、GPU 小车、飞弹和粒子效果以 Canvas 代码绘制。
 
 The battle-model atlas is an AI-assisted adaptation of the credited community reference: panel backgrounds removed, layout changed, and small details simplified. Its underlying creators and license remain as listed above. CEO sprites are newly generated fictional caricatures and do not imply endorsement.
+
+## 逐帧动作图集 / Frame animation sheets（2026-10-17）
+
+`dist/assets/animations/` 包含 15 张透明动作图集，每张 6 列 × 5 行、30 帧。九张 LLM 图集分别以对应的 ApprenTice 社区 Q 版原图为造型参考，通过内置图像生成工具创作不同动作帧；六张 CEO 图集以本项目的 `dist/assets/ceos.png` 为造型参考生成。
+
+改动包括绘制独立的待机、技能或行走、攻击、受击和退场姿势，并整理为统一网格。不是仅为原静态图添加整体位移或缩放。
+
+- LLM 文件：`deepseek.png`、`chatgpt.png`、`claude.png`、`kimi.png`、`gemini.png`、`glm.png`、`grok.png`、`minimax.png`、`qwen.png`。
+- CEO 文件：`sam.png`、`dario.png`、`elon.png`、`jensen.png`、`mark.png`、`liang.png`。
+- 原角色与图像的署名和来源保持不变：ApprenTice、ZipZipPipe，DeepSeek 原角色另署名上善无形。
+- 动作图集及其衍生作品采用 **CC BY-NC-SA 4.0**。
+
+These AI-assisted animation adaptations preserve the credited character identities while adding independently drawn poses for five animation states. LLM sheets derive from the attributed community references; CEO sheets derive from this project's generated caricatures. The animation artwork is shared under CC BY-NC-SA 4.0 with the same upstream attribution requirements.

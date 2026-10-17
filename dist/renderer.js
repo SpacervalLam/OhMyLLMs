@@ -1,5 +1,7 @@
 import {FIELD} from './engine.js';
-import {MODEL_MAP,CEO_MAP,COPY} from './data.js';
+import {MODELS,CEOS,MODEL_MAP,CEO_MAP,COPY} from './data.js';
+import {ANIMATED_CHARACTERS} from './animation.js';
+import {makeSpriteAtlas,drawAtlasSprite} from './sprite-atlas.js';
 
 const TAU=Math.PI*2;
 function rounded(ctx,x,y,w,h,r,fill,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}
@@ -8,8 +10,11 @@ function ellipse(ctx,x,y,rx,ry,fill){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,T
 function line(ctx,x1,y1,x2,y2,color,width=1){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();ctx.lineWidth=1;}
 export function loadImage(url){return new Promise(resolve=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url;});}
 export async function loadArtwork(){
- const [models,ceos]=await Promise.all([loadImage('assets/models.png'),loadImage('assets/ceos.png')]);
- return {models,ceos};
+ const manifest=await fetch('assets/animations/manifest.json').then(r=>r.ok?r.json():null).catch(()=>null);
+ const [models,ceos,entries]=await Promise.all([loadImage('assets/models.png'),loadImage('assets/ceos.png'),
+  Promise.all(ANIMATED_CHARACTERS.map(async id=>{const image=await loadImage(`assets/animations/${id}.png`);return [id,image?makeSpriteAtlas(image,manifest?.characters[id]):null];}))]);
+ const animations=Object.fromEntries(entries);
+ return {models,ceos,animations,missingAnimations:ANIMATED_CHARACTERS.filter(id=>!animations[id])};
 }
 export class GardenRenderer{
  constructor(canvas,art){
@@ -61,7 +66,9 @@ export class GardenRenderer{
   ctx.setLineDash([3,6]);line(ctx,1055,111,1055,575,'#cec4a450');ctx.setLineDash([]);
  }
  bush(ctx,x,y,s=1){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ellipse(ctx,0,3,20,6,'#bfccb0');for(const [dx,dy,angle]of[[-12,-4,-.7],[-3,-10,-.25],[7,-7,.4],[15,-2,.8]]){ctx.save();ctx.translate(dx,dy);ctx.rotate(angle);ellipse(ctx,0,-4,5,11,'#9fb88a');line(ctx,0,-11,0,4,'#8ea879');ctx.restore();}ctx.restore();}
- sprite(kind,index,x,y,size,bob=0,opacity=1){
+ sprite(kind,index,x,y,size,bob=0,opacity=1,actor=null){
+  const id=kind==='models'?MODELS[index].id:CEOS[index].id;
+  if(drawAtlasSprite(this.ctx,this.art.animations?.[id],actor?.animation||{state:'idle',time:this.animationTime||0},x,y,size,{opacity,reduced:this.reduced}))return;
   const img=this.art[kind],rect=this.rects[kind]?.[index],ctx=this.ctx;if(!img||!rect){ellipse(ctx,x,y,20,25,kind==='models'?'#8ba3ac':'#bd957d');return;}
   const scale=Math.min(size/rect.h,size*1.05/rect.w),w=rect.w*scale,h=rect.h*scale;
   ctx.save();ctx.globalAlpha=opacity;ctx.drawImage(img,rect.x,rect.y,rect.w,rect.h,x-w/2,y-h+bob,w,h);ctx.restore();
@@ -72,7 +79,7 @@ export class GardenRenderer{
  }
  draw(game,now){
   const ctx=this.ctx;ctx.clearRect(0,0,1120,650);ctx.drawImage(this.background,0,0);
-  const t=this.reduced?0:now*.001;
+  const t=this.reduced?0:game.tickTime;this.animationTime=t;
   label(ctx,COPY[game.lang].threat,1058,607,10,'#aa9b7c','center');
   // Rescue carts are graphics cards, because compute saves the day.
   for(let row=0;row<5;row++){
@@ -85,20 +92,24 @@ export class GardenRenderer{
    if(this.selection&&this.selection!=='shovel'&&!occupied)this.sprite('models',MODEL_MAP[this.selection].index,x+50,y+78,76,0,.4);
    else if(!this.selection&&!occupied){line(ctx,x+44,y+48,x+56,y+48,'#f6f8e5a0',2);line(ctx,x+50,y+42,x+50,y+54,'#f6f8e5a0',2);}
   }
-  const sprites=[...game.units.map(u=>({kind:'unit',value:u})),...game.enemies.map(e=>({kind:'enemy',value:e}))].sort((a,b)=>a.value.row-b.value.row||a.value.x-b.value.x);
+  const sprites=[...game.units.map(u=>({kind:'unit',value:u})),...game.enemies.map(e=>({kind:'enemy',value:e})),...game.departures.map(d=>({kind:'departure',value:d}))].sort((a,b)=>a.value.row-b.value.row||a.value.x-b.value.x);
   for(const {kind,value:v} of sprites){
-   const bob=Math.sin(t*2.4+v.id)*1.1;
+   if(kind==='departure'){
+    const fading=Math.min(1,(.85-v.departureAge)/.25);
+    const unit=v.kind==='unit',index=unit?MODEL_MAP[v.model].index:CEO_MAP[v.type].index;
+    this.sprite(unit?'models':'ceos',index,v.x,v.y+26,v.mini?62:85,0,Math.max(0,fading),v);continue;
+   }
    ellipse(ctx,v.x,v.y+27,kind==='enemy'?25:26,7,'#4d79452d');
    if(kind==='unit'){
     const m=MODEL_MAP[v.model];
     if(v.model==='qwen'&&!v.strike){ctx.beginPath();ctx.ellipse(v.x,v.y-8,36,40,0,-Math.PI*.65,Math.PI*.65);ctx.strokeStyle='#b8d5f080';ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1;}
-    if(v.strike){ctx.save();ctx.filter='grayscale(.9)';this.sprite('models',m.index,v.x,v.y+24,82,bob,.6);ctx.restore();rounded(ctx,v.x-30,v.y-64,60,21,5,'#fff2d8','#d6b27a');label(ctx,'403',v.x,v.y-49,12,'#aa7a42','center');}
-    else {ctx.save();if(v.flash>0)ctx.filter='brightness(1.17)';this.sprite('models',m.index,v.x,v.y+26,85,bob);ctx.restore();}
+    if(v.strike){ctx.save();ctx.filter='grayscale(.7)';this.sprite('models',m.index,v.x,v.y+24,85,0,.75,v);ctx.restore();rounded(ctx,v.x-30,v.y-64,60,21,5,'#fff2d8','#d6b27a');label(ctx,'403',v.x,v.y-49,12,'#aa7a42','center');}
+    else {ctx.save();if(v.flash>0)ctx.filter='brightness(1.12)';this.sprite('models',m.index,v.x,v.y+26,88,0,1,v);ctx.restore();}
     if(v.hp<v.maxHp)this.bar(v.x,v.y+32,v.hp,v.maxHp);
     // Production progress around the whale's Token icon.
     if(v.model==='deepseek'&&game.phase==='playing'){ctx.beginPath();ctx.arc(v.x+27,v.y-43,7,-Math.PI/2,-Math.PI/2+TAU*(1-v.produceTimer/7));ctx.strokeStyle='#eedb8a';ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;}
    }else{
-    const c=CEO_MAP[v.type];ctx.save();if(v.flash>0)ctx.filter='brightness(1.6)';this.sprite('ceos',c.index,v.x,v.y+26,v.mini?62:86,Math.sin(t*(v.boost?18:9)+v.id)*(v.mini?2:1.7));ctx.restore();
+    const c=CEO_MAP[v.type];ctx.save();if(v.flash>0)ctx.filter='brightness(1.3)';this.sprite('ceos',c.index,v.x,v.y+26,v.mini?62:88,0,1,v);ctx.restore();
     if(v.slow>0){ctx.strokeStyle='#a9c6f0';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(v.x,v.y+25,29,8,0,0,TAU);ctx.stroke();ctx.lineWidth=1;}
     if(v.boost>0){ctx.beginPath();ctx.moveTo(v.x+27,v.y);ctx.lineTo(v.x+56+Math.sin(t*25)*8,v.y+8);ctx.lineTo(v.x+29,v.y+16);ctx.fillStyle='#efa45b';ctx.fill();}
     if(v.shield>0){ctx.beginPath();ctx.ellipse(v.x,v.y-10,34,42,0,0,TAU);ctx.strokeStyle='#d8b68a99';ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1;}

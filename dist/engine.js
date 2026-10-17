@@ -1,4 +1,5 @@
 import { MODEL_MAP, CEO_MAP } from './data.js';
+import {playAnimation,advanceAnimation} from './animation.js';
 
 export const FIELD = Object.freeze({width:1120,height:650,x:100,y:104,cols:9,rows:5,cw:100,ch:96});
 const WAVE_TYPES = [
@@ -15,7 +16,7 @@ export class GardenGame {
   this.lang=lang; this.difficulty=difficulty; this.eggs=eggs;
   this.seed=seed>>>0; this.phase='ready'; this.time=0; this.tickTime=0;
   this.tokens=difficulty==='easy'?250:difficulty==='hard'?150:200;
-  this.units=[]; this.enemies=[]; this.projectiles=[]; this.coins=[]; this.effects=[];
+  this.units=[]; this.enemies=[]; this.projectiles=[]; this.coins=[]; this.effects=[];this.departures=[];
   this.cooldowns={}; this.events=[]; this.kills=0; this.wave=0; this.totalWaves=6;
   this.mowers=Array(5).fill(true); this.queue=[]; this.spawnTimer=0;
   this.airdropTimer=6; this.nextWaveTimer=null; this.nextId=1;
@@ -34,7 +35,7 @@ export class GardenGame {
  refreshStrikes(){
   for(const u of this.units.filter(u=>u.model==='claude')){
    const strike=this.eggs&&this.lang==='zh'&&u.age>=1;
-   if(u.strike!==strike){u.strike=strike;this.emit(strike?'strike':'resumeClaude',{unit:u.id});}
+   if(u.strike!==strike){u.strike=strike;playAnimation(u,strike?'special':'idle');this.emit(strike?'strike':'resumeClaude',{unit:u.id});}
   }
  }
  plant(model,row,col){
@@ -53,7 +54,7 @@ export class GardenGame {
   if(!['ready','playing'].includes(this.phase))return {ok:false,reason:'notPlaying'};
   const i=this.units.findIndex(u=>u.row===row&&u.col===col);
   if(i<0)return {ok:false,reason:'empty'};
-  const u=this.units.splice(i,1)[0];this.tokens+=Math.floor(MODEL_MAP[u.model].cost/2);
+  const u=this.units.splice(i,1)[0];this.tokens+=Math.floor(MODEL_MAP[u.model].cost/2);this.depart(u,'unit');
   this.effect(u.x,u.y,'plant','#d8b56f');this.emit('remove',{model:u.model});return {ok:true};
  }
  collect(id){const i=this.coins.findIndex(c=>c.id===id);if(i<0)return false;const c=this.coins.splice(i,1)[0];this.tokens+=c.value;this.emit('collect',{value:c.value});this.effect(c.x,c.y,'token','#e9ba55',`+${c.value}`);return true;}
@@ -64,7 +65,7 @@ export class GardenGame {
   const growth=1+(this.wave-1)*0.075;
   const e={id:this.nextId++,type,row,x:1055+(options.offset||0),y:FIELD.y+row*96+48,hp:Math.round(c.hp*scale*growth),maxHp:Math.round(c.hp*scale*growth),speed:c.speed*(this.difficulty==='hard'?1.1:1),damage:c.damage,armor:c.armor||0,shield:0,age:0,slow:0,attackTimer:0,abilityTimer:0,boost:0,flash:0,mini:!!options.mini};
   if(e.mini){e.hp=e.maxHp=70;e.speed=21;e.damage=12;}
-  this.enemies.push(e);return e;
+  playAnimation(e,'walk');e.animation.time=e.id*.067;this.enemies.push(e);return e;
  }
  beginWave(){
   if(this.wave>=this.totalWaves)return;
@@ -82,13 +83,14 @@ export class GardenGame {
   if(e.hp<=0)return;
   let remaining=damage;
   for(const kind of ['shield','armor']){const blocked=Math.min(e[kind]||0,remaining);e[kind]-=blocked;remaining-=blocked;}
-  e.hp-=remaining;e.flash=.14;
-  if(e.hp<=0){this.kills++;this.tokens+=e.mini?5:10;if(e.type==='liang'&&!e.mini)this.tokens+=40;this.emit('kill',{type:e.type});this.effect(e.x,e.y,'poof',CEO_MAP[e.type].color);}
+  e.hp-=remaining;e.flash=.14;playAnimation(e,'hurt');
+  if(e.hp<=0){this.kills++;this.tokens+=e.mini?5:10;if(e.type==='liang'&&!e.mini)this.tokens+=40;this.emit('kill',{type:e.type});this.depart(e,'enemy');this.effect(e.x,e.y,'poof',CEO_MAP[e.type].color);}
  }
+ depart(actor,kind){const ghost={...actor,kind,departureAge:0};playAnimation(ghost,'defeat');this.departures.push(ghost);}
  fire(u,target,{damage,slow=0,splash=0,pierce=1,delay=0}={}){
   const m=MODEL_MAP[u.model];
   this.projectiles.push({id:this.nextId++,model:u.model,x:u.x+27,y:u.y-14,targetY:target.y-14,row:target.row,vx:340,damage:damage??m.damage,slow,splash,pierce,hit:[],delay,targetId:target.id,age:0,color:m.color});
-  u.flash=.2;this.emit('shoot',{model:u.model});
+  u.flash=.2;playAnimation(u,'attack');this.emit('shoot',{model:u.model});
  }
  attack(u){
   const m=MODEL_MAP[u.model];
@@ -109,11 +111,18 @@ export class GardenGame {
   return true;
  }
  update(dt){
-  if(this.phase==='paused'||this.phase==='won'||this.phase==='lost'||dt<=0)return;
+  if(this.phase==='paused'||dt<=0)return;
   dt=Math.min(dt,.1);this.tickTime+=dt;
+  for(const d of this.departures){d.departureAge+=dt;advanceAnimation(d,dt,'defeat');}
+  this.departures=this.departures.filter(d=>d.departureAge<.85);
+  // Let the final defeat finish even when the last hit ends the battle.
+  if(this.phase==='won'||this.phase==='lost'){
+   for(const u of this.units)advanceAnimation(u,dt,u.strike?'special':'idle');
+   return;
+  }
   for(const id of Object.keys(this.cooldowns))this.cooldowns[id]=Math.max(0,this.cooldowns[id]-dt);
   for(const f of this.effects)f.age+=dt;this.effects=this.effects.filter(f=>f.age<f.duration);
-  for(const u of this.units){u.age+=dt;u.flash=Math.max(0,u.flash-dt);}
+  for(const u of this.units){u.age+=dt;u.flash=Math.max(0,u.flash-dt);advanceAnimation(u,dt,u.strike?'special':'idle');}
   this.refreshStrikes();
   if(this.phase!=='playing')return;
   this.time+=dt;
@@ -127,7 +136,7 @@ export class GardenGame {
    const m=MODEL_MAP[u.model];
    if(m.damage===0){
     u.produceTimer-=dt;
-    if(u.produceTimer<=0){u.produceTimer=m.period;
+    if(u.produceTimer<=0){u.produceTimer=m.period;playAnimation(u,'attack');
      if(u.model==='deepseek')this.coin(u.x+15,u.y-26,25);
      if(u.model==='kimi'){this.coin(u.x+15,u.y-26,15);for(const ally of this.units.filter(a=>Math.abs(a.row-u.row)<=1&&Math.abs(a.col-u.col)<=1)){ally.hp=Math.min(ally.maxHp,ally.hp+40);this.effect(ally.x,ally.y,'heal','#7ba88a','+40');}}
      if(u.model==='qwen'){u.hp=Math.min(u.maxHp,u.hp+30);this.effect(u.x,u.y,'heal','#7ba88a','+30');}
@@ -136,13 +145,14 @@ export class GardenGame {
   }
   for(const e of [...this.enemies]){
    if(e.hp<=0)continue;e.age+=dt;e.flash=Math.max(0,e.flash-dt);e.slow=Math.max(0,e.slow-dt);e.boost=Math.max(0,e.boost-dt);e.abilityTimer+=dt;
-   if(e.type==='dario'&&e.abilityTimer>=10){e.abilityTimer=0;e.shield=80;this.effect(e.x,e.y,'shield','#d49b6c');}
+   if(e.type==='dario'&&e.abilityTimer>=10){e.abilityTimer=0;e.shield=80;playAnimation(e,'attack');this.effect(e.x,e.y,'shield','#d49b6c');}
    if(e.type==='elon'&&e.abilityTimer>=9){e.abilityTimer=0;e.boost=2;this.effect(e.x,e.y,'boost','#da8a51');}
-   if(e.type==='mark'&&!e.mini&&e.abilityTimer>=12){e.abilityTimer=-999;for(const offset of [18,55]){const baby=this.spawnEnemy('mark',e.row,{mini:true});baby.x=e.x+offset;}this.effect(e.x,e.y,'poof','#6e93b0');}
-   if(e.type==='liang'&&e.abilityTimer>=12){e.abilityTimer=0;this.tokens=Math.max(0,this.tokens-20);this.emit('stolen');this.effect(e.x,e.y,'token','#ce715d','−20');}
+   if(e.type==='mark'&&!e.mini&&e.abilityTimer>=12){e.abilityTimer=-999;playAnimation(e,'attack');for(const offset of [18,55]){const baby=this.spawnEnemy('mark',e.row,{mini:true});baby.x=e.x+offset;}this.effect(e.x,e.y,'poof','#6e93b0');}
+   if(e.type==='liang'&&e.abilityTimer>=12){e.abilityTimer=0;playAnimation(e,'attack');this.tokens=Math.max(0,this.tokens-20);this.emit('stolen');this.effect(e.x,e.y,'token','#ce715d','−20');}
    const blocker=this.units.filter(u=>u.row===e.row&&u.hp>0&&e.x-u.x<62&&e.x-u.x>-28).sort((a,b)=>b.x-a.x)[0];
+   advanceAnimation(e,dt,blocker?'idle':'walk',e.slow>0?.55:e.boost>0?2.5:1);
    if(blocker){
-    e.attackTimer-=dt;if(e.attackTimer<=0){e.attackTimer=1;blocker.hp-=e.damage;blocker.flash=.18;this.effect(blocker.x,blocker.y-22,'hit','#d78a70');if(blocker.model==='qwen'&&e.type==='jensen')e.armor=Math.max(0,e.armor-30);}
+    e.attackTimer-=dt;if(e.attackTimer<=0){e.attackTimer=1;blocker.hp-=e.damage;blocker.flash=.18;playAnimation(e,'attack');playAnimation(blocker,'hurt');this.effect(blocker.x,blocker.y-22,'hit','#d78a70');if(blocker.model==='qwen'&&e.type==='jensen')e.armor=Math.max(0,e.armor-30);}
    }else{e.x-=e.speed*(e.slow>0?.45:1)*(e.boost>0?3:1)*dt;}
    if(e.x<FIELD.x-32){
     if(this.mowers[e.row]){this.mowers[e.row]=false;for(const same of this.enemies.filter(a=>a.row===e.row&&a.hp>0)){same.armor=0;same.shield=0;this.damageEnemy(same,99999);}this.effect(20,e.y,'mower','#6c8355');this.emit('mower',{row:e.row});}
@@ -163,6 +173,7 @@ export class GardenGame {
   }
   this.projectiles=this.projectiles.filter(p=>p.x<1200);
   this.enemies=this.enemies.filter(e=>e.hp>0);
+  for(const u of this.units)if(u.hp<=0)this.depart(u,'unit');
   this.units=this.units.filter(u=>u.hp>0);
   if(this.wave>0&&!this.queue.length&&!this.enemies.length&&this.nextWaveTimer===null){
    if(this.wave===this.totalWaves){this.phase='won';this.emit('win');}

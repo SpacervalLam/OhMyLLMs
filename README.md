@@ -2,12 +2,26 @@
 
 九位社区 AI 娘迎战六位 CEO 的非商业同人塔防。原生 HTML、CSS、Canvas、JavaScript；运行与游玩不调用模型 API，不需要 API Key，不包含服务端数据收集。所有战斗立绘和参考图都随项目提供。
 
+## 逐帧动画
+
+15 位角色各有一张独立透明动作图集，6 列 × 5 行，每张 30 帧，共 450 帧。每帧是独立绘制的姿势，包含头发、手臂、腿部、道具和表情的变化。
+
+- LLM：待机、专属技能／Claude 罢工、攻击／后勤技能、受击、退场。
+- CEO：待机、行走、攻击、受击、退场；冲刺时行走动作也会加速。
+- 实战中的动作由攻击、伤害、生产、治疗、死亡等事件触发，暂停与倍速同步作用于动画。
+- 角色卡牌和图鉴同样播放逐帧动画。进入「角色图鉴」可以选择动作并暂停预览，检查全部 15 位角色。
+- 图集位于 `dist/assets/animations/`，状态布局在 `dist/animation.js`，状态推进在 `dist/engine.js`，绘制在 `dist/sprite-atlas.js`。生成图的间距存在细微差异，`manifest.json` 为 450 帧提供经校准的裁切坐标，播放时以同一角色的待机高度确定缩放，避免邻帧残影与退场时异常放大。
+
+可选的素材检查（需要安装 Pillow 的 Python 环境）：`python scripts/verify-animation-assets.py`。该脚本只检查透明度、各帧非空和帧重复，不会修改图像。
+
+重新生成裁切索引：`python scripts/prepare-animation-manifest.py`；仅写入 JSON 元数据，不改动原始 PNG 像素。
+
 ## 本地运行
 
 需要 Node.js 22 或更新版本，无须安装依赖。
 
 ```powershell
-cd C:\Users\86139\Documents\LLM_vs_Capitalist\llm-vs-capital
+cd G:\LLM_vs_Capitalist
 npm.cmd run dev
 ```
 
