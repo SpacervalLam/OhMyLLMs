@@ -6,11 +6,15 @@
   "scripts": {
     "dev": "node scripts/desktop.mjs dev",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/game.js && node --check dist/engine.js && node --check dist/enemy-scaling.js && node --check dist/data.js && node --check dist/field-guide.js && node --check dist/animation.js && node --check dist/sprite-atlas.js && node --check dist/renderer.js && node --check dist/trump-boss.js && node --check dist/trump-vfx.js && node --check dist/elon-boss.js && node --check dist/elon-vfx.js && node --check dist/elon-data.js && node --check dist/super-boss.js && node --check dist/input-lock.js && node --check dist/enemy-vfx.js && node --check dist/skill-vfx.js && node --check dist/ranks.js && node --check dist/drag-deploy.js && node --check scripts/desktop.mjs",
+    "check": "node --check dist/game.js && node --check dist/engine.js && node --check dist/enemy-scaling.js && node --check dist/data.js && node --check dist/field-guide.js && node --check dist/animation.js && node --check dist/sprite-atlas.js && node --check dist/renderer.js && node --check dist/trump-boss.js && node --check dist/trump-vfx.js && node --check dist/elon-boss.js && node --check dist/elon-vfx.js && node --check dist/elon-data.js && node --check dist/super-boss.js && node --check dist/input-lock.js && node --check dist/enemy-vfx.js && node --check dist/skill-vfx.js && node --check dist/ranks.js && node --check dist/drag-deploy.js && node --check scripts/desktop.mjs && node --check scripts/installer.mjs && node --check scripts/compress-release-assets.mjs",
     "dev:web": "node scripts/serve.mjs",
     "build": "node scripts/desktop.mjs build",
     "package": "node scripts/desktop.mjs package",
     "installer": "node scripts/installer.mjs",
+    "compress:release": "node scripts/compress-release-assets.mjs",
     "test:desktop": "node scripts/desktop.mjs smoke"
+  },
+  "devDependencies": {
+    "sharp": "0.35.4"
   }
 }

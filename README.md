@@ -48,7 +48,9 @@ Elon Musk Super 拥有星链组网、全自动驾驶、星舰试射、一级回�
 
 ## 素材与许可
 
-最终素材位于 `dist/assets/`，共 64 份无损 WebP 图片，原尺寸、透明通道与可见像素均保持一致。32 位角色各有 30 帧动作，两套防御形态各有 30 帧，合计 1,020 帧。Windows 图标保留原生 ICO，网页图标使用 SVG。
+美术母版位于 `dist/assets/`，共 64 份无损 WebP 图片。32 位角色各有 30 帧动作，两套防御形态各有 30 帧，合计 1,020 帧。Windows 图标保留原生 ICO，网页图标使用 SVG。
+
+桌面构建参考 vivian-rs 的发布压缩方法，从母版依次尝试 WebP Q90、Q95、Q98，透明度质量 100、编码 effort 6，并使用高质量色度采样保护浅色细节。发布图保持原尺寸、帧位置和逐像素透明通道；不透明像素 RGB 均方根误差最多 5，整体及浅紫／白色区域各通道平均偏移最多 1/255。颜色超标或节省不足 5% 时保留母版，尺寸或透明度异常会中止构建。仓库母版不会被重新编码；重复构建始终从母版读取，避免有损压缩累积。缓存和逐图检测报告保存在用户目录 `.codex/documents/OhMyLLMs/webp-compression/`，不进入仓库和安装包。
 
 人物、技能和台词均为非官方虚构同人创作，不代表相关公司或个人认可。完整作者、来源与改编说明见 [ASSET_CREDITS.md](ASSET_CREDITS.md)，许可见 [LICENSE.md](LICENSE.md)。保留上游作者署名、非商业与相应共享要求。
 
@@ -57,6 +59,7 @@ Elon Musk Super 拥有星链组网、全自动驾驶、星舰试射、一级回�
 需要 Windows、Node.js 22+ 与 .NET 10 SDK。首次构建和首次下载安装工具需要联网；生成的完整安装包可离线安装。
 
 ```powershell
+npm.cmd ci               # 安装构建与图片压缩依赖
 npm.cmd run dev          # 构建并启动桌面窗口
 npm.cmd run build        # 构建带 .NET 运行时的完整应用目录
 npm.cmd run package      # 构建便携 ZIP
@@ -64,6 +67,7 @@ npm.cmd run installer    # 构建完整 Setup EXE、便携 ZIP 与 SHA256 校验
 npm.cmd test             # 引擎、交互、图集与版本验证
 npm.cmd run check        # JavaScript 语法检查
 npm.cmd run test:desktop # 实际 Windows / WebView2 宿主验证
+npm.cmd run compress:release # 重新评估已构建应用的图片，始终读取无损母版
 npm.cmd run dev:web      # 可选网页调试
 ```
 

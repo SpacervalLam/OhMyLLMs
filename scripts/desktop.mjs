@@ -22,6 +22,7 @@ async function run(command, args) {
 if (action === 'dev') {
   await run('dotnet', ['run', '--project', project, '--', '--dev']);
 } else {
+  const {compressReleaseAssets}=await import('./compress-release-assets.mjs');
   // A publish must never retain obsolete game assets from an earlier version.
   const relative=path.relative(realpathSync(root),existsSync(output)?realpathSync(output):output);
   if(relative.startsWith('..')||path.isAbsolute(relative)||relative!==path.join('artifacts','desktop','OhMyLLMs'))throw new Error('Unsafe publish output path.');
@@ -42,6 +43,7 @@ if (action === 'dev') {
   for(const framework of runtime.includedFrameworks)notices(`${framework.name.toLowerCase()}.runtime.win-x64`,framework.version);
   const webviewVersion=readFileSync(project,'utf8').match(/Include="Microsoft.Web.WebView2" Version="([^"]+)"/)[1];
   notices('microsoft.web.webview2',webviewVersion);
+  await compressReleaseAssets({root});
   writeFileSync(path.join(output, 'README.txt'), [
     `Oh My LLMs ${version} — Windows desktop edition`, '',
     'Double-click OhMyLLMs.exe. Keep the game folder and DLL files next to it.',

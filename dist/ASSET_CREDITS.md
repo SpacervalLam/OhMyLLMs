@@ -22,7 +22,7 @@ These character adaptations are attributed to ApprenTice and the underlying crea
 
 ## 最终资源与上游 / Final assets and upstream sources
 
-下列最终图片使用无损 WebP 格式；已逐份验证原尺寸、透明通道与可见像素一致。上游来源链接保留原文件名。
+下列仓库母版使用无损 WebP 格式。桌面发布资源可采用经过颜色误差验证的有损 WebP 压缩，保持原尺寸与逐像素透明通道；未通过验证时使用母版。压缩不改变原设作者署名与许可要求，上游来源链接保留原文件名。
 
 | 本地文件 / Local file | 上游文件 / Upstream file | 尺寸 / Dimensions |
 | --- | --- | --- |
