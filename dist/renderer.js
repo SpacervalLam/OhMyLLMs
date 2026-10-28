@@ -299,7 +299,12 @@ export class GardenRenderer{
   if(f.type==='bellWave'){
    // A listing bell's shockwave: three flat rings across the board, plus the bell itself.
    ctx.save();ctx.translate(f.x,f.y);ctx.scale(1,.45);
-   for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(0,0,22+p*188-i*16,0,TAU);ctx.strokeStyle=f.color;ctx.globalAlpha=(1-p)*(.55-i*.13);ctx.lineWidth=3-i;ctx.stroke();}
+   for(let i=0;i<3;i++){
+    const radius=22+p*188-i*16;
+    // Inner rings start later; Canvas rejects a negative radius and stops the frame loop.
+    if(radius<=0)continue;
+    ctx.beginPath();ctx.arc(0,0,radius,0,TAU);ctx.strokeStyle=f.color;ctx.globalAlpha=(1-p)*(.55-i*.13);ctx.lineWidth=3-i;ctx.stroke();
+   }
    ctx.restore();
    ctx.globalAlpha=Math.sin(Math.PI*Math.min(1,p*2));
    ctx.fillStyle='#e3bd6b';ctx.strokeStyle='#8f6c33';ctx.lineWidth=1.2;

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {GardenRenderer} from '../dist/renderer.js';
+import {GardenGame} from '../dist/engine.js';
 
 // A renderer stub with a real canvas-state machine: the burn mask swaps this.ctx
 // for an offscreen context, so an unbalanced save/restore or a leaked
@@ -17,6 +18,10 @@ function stub(){
    if(key==='save')return ()=>{stack.push({...o});saves++;};
    if(key==='restore')return ()=>{assert.ok(stack.length>0,'unbalanced restore: the mask swapped contexts');Object.assign(o,stack.pop());};
    return (...args)=>{for(const a of args)if(typeof a==='number')assert.ok(Number.isFinite(a),`${String(key)}: invalid number`);
+    if(key==='arc'||key==='ellipse'){
+     assert.ok(args[2]>=0,`${String(key)}: negative radius`);
+     if(key==='ellipse')assert.ok(args[3]>=0,'ellipse: negative radius');
+    }
     if(String(key).startsWith('create'))return gradient;};
   },
   set(o,key,value){o[key]=value;return true;}
@@ -86,4 +91,24 @@ test('bell, lane-swap, prospectus and stun effects restore canvas state',()=>{
   r.effect({type,x:400,y:300,age:.4,duration:1,color:'#d9b76a'},1.2);
  }
  finish();
+});
+
+test('IPO bell renders from its first frame through phase two without invalid canvas radii',()=>{
+ for(const phaseTwo of [false,true]){
+  const g=new GardenGame({starter:false,seed:42});g.start();g.nextWaveTimer=999;
+  const boss=g.spawnEnemy('ipo',2);boss.x=800;
+  boss.hp=boss.maxHp*(phaseTwo?.5:1);boss.abilityTimer=phaseTwo?8:12;
+  const {r,finish}=stub();
+  g.update(1/60);
+  assert.equal(boss.enraged,phaseTwo);
+  assert.equal(g.enemies.filter(e=>e.mini).length,2);
+  assert.ok(g.effects.some(f=>f.type==='bellWave'&&f.age===0));
+  for(let frame=0;frame<60;frame++){
+   for(const effect of g.effects)r.effect(effect,g.time);
+   g.update(1/60);
+  }
+  assert.ok(!g.effects.some(f=>f.type==='bellWave'));
+  assert.equal(g.phase,'playing');
+  finish();
+ }
 });
