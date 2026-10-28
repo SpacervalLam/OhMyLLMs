@@ -2,4 +2,12 @@ node_modules/
 artifacts/
 *.tar.gz
 *.log
-.openai/local/
+.openai/
+.workbuddy/
+.workbuddy-ai/
+tmp/
+*.download
+*.user
+*.suo
+desktop/bin/
+desktop/obj/
