@@ -1,11 +1,11 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef PublishDirectory
   #define PublishDirectory "..\artifacts\desktop\OhMyLLMs"
 #endif
 #ifndef ReleaseDirectory
-  #define ReleaseDirectory "..\artifacts\releases\1.0.0"
+  #define ReleaseDirectory "..\artifacts\releases\1.0.1"
 #endif
 
 [Setup]

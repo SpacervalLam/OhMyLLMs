@@ -1,4 +1,4 @@
-# Oh My LLMs · 1.0.0
+# Oh My LLMs · 1.0.1
 
 十一位 AI 娘迎战资本阵营的无限波次同人塔防。Windows 原生窗口与本地 WebView2 渲染，运行不调用模型 API、不需要 API Key、不包含服务端数据收集。
 
@@ -6,8 +6,8 @@
 
 支持 Windows 10 2004 或更新版本、Windows 11，x64。
 
-- 完整安装包：`OhMyLLMs-1.0.0-Setup-x64.exe`。包含全部素材、.NET 运行时与 Microsoft WebView2 离线安装程序，可离线安装；已有 WebView2 时跳过依赖安装。
-- 便携包：`OhMyLLMs-1.0.0-Windows-x64.zip`。解压后运行 `OhMyLLMs.exe`，保留完整目录。已包含 .NET 运行时，电脑需要具备 Microsoft WebView2 Runtime。
+- 完整安装包：`OhMyLLMs-1.0.1-Setup-x64.exe`。包含全部素材、.NET 运行时与 Microsoft WebView2 离线安装程序，可离线安装；已有 WebView2 时跳过依赖安装。
+- 便携包：`OhMyLLMs-1.0.1-Windows-x64.zip`。解压后运行 `OhMyLLMs.exe`，保留完整目录。已包含 .NET 运行时，电脑需要具备 Microsoft WebView2 Runtime。
 - 源码目录：双击 `OhMyLLMs.cmd`；尚无构建产物时启动器使用本机 .NET SDK 构建。
 
 安装包默认安装到当前用户的应用目录，提供开始菜单快捷方式、可选桌面快捷方式和标准卸载程序。战绩、设置与窗口位置保存在 `%LOCALAPPDATA%/OhMyLLMs/`，卸载不删除个人数据。
@@ -17,6 +17,8 @@
 点击右侧入口开始防守；准备阶段可以先部署，没有模型冷却。
 
 - 选择卡牌再点击草地，或将卡牌拖到棋盘。同格同名投入累计 1 / 3 / 7 枚，分别为一 / 二 / 三星；升星提高生命与普攻，并逐步解锁技能。三星后可另购 Harness 装备。
+- 也可以直接点击场上未满星的棋子：系统用她自己的模型再投一枚，照常扣该模型的费用与冷却，不必先回头选中同名卡（拖动卡牌投放仍按手里的模型结算）。
+- 右键点击二星或三星攻击型棋子可以切换朝向，普攻与定向技能随之转向；生产与治疗棋子不提供此操作。
 - DeepSeek 生产 Token，Kimi 治疗与支援，Qwen 抗线、自愈并保护邻军；其他模型各有贯穿、范围输出、控制和特殊技能。完整规则见游戏图鉴。
 - 铲除返还实际投入费用的 50%，开局赠送棋子不计入退款。
 - 无限波次。每路有一次 GPU 救场小车；救场用完后再次突破，该局结束。击败敌人累计积分并保存最高纪录。
@@ -71,6 +73,6 @@ npm.cmd run compress:release # 重新评估已构建应用的图片，始终读�
 npm.cmd run dev:web      # 可选网页调试
 ```
 
-发布文件位于 `artifacts/releases/1.0.0/`，完整应用目录位于 `artifacts/desktop/OhMyLLMs/`。安装工具缓存于 `%LOCALAPPDATA%/OhMyLLMs/BuildTools/`，下载的安装程序会验证官方 Authenticode 签名。
+发布文件位于 `artifacts/releases/1.0.1/`，完整应用目录位于 `artifacts/desktop/OhMyLLMs/`。安装工具缓存于 `%LOCALAPPDATA%/OhMyLLMs/BuildTools/`，下载的安装程序会验证官方 Authenticode 签名。
 
 测试报告与截图默认写入用户目录 `.codex/documents/OhMyLLMs/desktop-smoke/`，可用 `OHMYLLMS_SMOKE_DIR` 指定其他仓库外路径。开发过程资料、未采用美术和旧构建不纳入源码仓库或安装包。

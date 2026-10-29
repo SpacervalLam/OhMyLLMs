@@ -62,6 +62,10 @@ export function drawSkillAura(c,u,t){
 
 export function drawSkillProjectile(c,p,t,projectileArt=null){
  c.save();c.translate(p.x,p.y);
+ // Unit fire can leave in either direction now; the prop art is drawn pointing
+ // right, so a left-bound shot is mirrored. Hostile fire always travels left and
+ // is already painted that way, so it is left alone.
+ if(!p.hostile&&p.vx<0)c.scale(-1,1);
  if(p.hostile){
   // Capital's return fire uses readable physical props, not recoloured LLM orbs.
   if(p.kind==='parcel'){
@@ -184,28 +188,28 @@ export function drawSkillChannels(c,g,t){
   }
  }
  for(const u of g.units){
-  if(!u.beam)continue;const b=u.beam,x=u.x+30,y=u.y-14,end=FIELD.width,full=starsOf(u)===3;c.save();
+  if(!u.beam)continue;const b=u.beam,dir=(u.facing??1)<0?-1:1,x=u.x+30*dir,y=u.y-14,end=dir>0?FIELD.width:0,full=starsOf(u)===3;c.save();
   const charge=clamp(1-b.charge/.45),a=b.charge>0?charge:clamp(b.fire/.24);c.globalAlpha=a;
   if(!full){
    glow(c,x,y,23,'#a4eedc',.5);
    c.save();c.translate(x,y);c.scale(.4,1);ring(c,0,0,15,'#a4eedc',2);c.restore();
    if(b.charge>0){line(c,x,y,end,y,'#a4eedc55',.8);ring(c,x,y,7+charge*9,'#d5fff4',1.5);}
    else{line(c,x,y,end,y,'#82dfc933',10);line(c,x,y,end,y,'#a4eedcbb',4);line(c,x,y,end,y,'#f0fff9',1.5);
-    for(let i=0;i<7;i++){const xx=x+((t*230+i*83)%(end-x));line(c,xx,y-4,Math.min(end,xx+16),y-4,'#d5fff4aa',1);}
-    for(const e of g.enemies.filter(e=>e.hp>0&&e.row===u.row&&e.x>u.x-20))ring(c,e.x,y,8,'#b5f5df',1.5);
+    for(let i=0;i<7;i++){const xx=x+dir*((t*230+i*83)%Math.abs(end-x));line(c,xx,y-4,dir>0?Math.min(end,xx+16):Math.max(end,xx-16),y-4,'#d5fff4aa',1);}
+    for(const e of g.enemies.filter(e=>e.hp>0&&e.row===u.row&&(e.x-u.x)*dir>-20))ring(c,e.x,y,8,'#b5f5df',1.5);
    }
    c.restore();continue;
   }
   glow(c,x,y,40,'#c3b2f4',.6);
   // Three offset aperture rings establish the beam's depth and direction.
-  for(let i=0;i<3;i++){c.save();c.translate(x+i*22,y);c.scale(.35,1);runeRing(c,0,0,20+i*5,t*(i%2?-1:1),'#aa83d0',10);poly(c,0,0,14+i*3,6,'#a57acb',null,t*.3,1.3);c.restore();}
+  for(let i=0;i<3;i++){c.save();c.translate(x+i*22*dir,y);c.scale(.35,1);runeRing(c,0,0,20+i*5,t*(i%2?-1:1),'#aa83d0',10);poly(c,0,0,14+i*3,6,'#a57acb',null,t*.3,1.3);c.restore();}
   if(b.charge>0){line(c,x,y,end,y,'#e4d5ff66',.8);for(let i=0;i<8;i++){const an=i/8*TAU-t*2,r=(1-charge)*40+7;star(c,x+Math.cos(an)*r,y+Math.sin(an)*r,2,'#f4ecff');}}
   else{
    const width=10+Math.sin(t*23)*1.5,beam=c.createLinearGradient(x,0,end,0);beam.addColorStop(0,'#f0deff00');beam.addColorStop(.04,'#c4a3e4b0');beam.addColorStop(.65,'#ddc9f280');beam.addColorStop(1,'#b4e4ee00');
    c.fillStyle=beam;c.beginPath();c.moveTo(x,y-4);c.lineTo(end,y-width);c.lineTo(end,y+width);c.lineTo(x,y+4);c.fill();
    line(c,x,y,end,y,'#dfc7ff88',17);line(c,x,y,end,y,'#efe3ffbb',6);line(c,x,y,end,y,'#fffdf7',1.5);
    for(let k=0;k<2;k++){c.beginPath();for(let i=0;i<=32;i++){const xx=x+(end-x)*i/32,yy=y+Math.sin(i*.6-t*8+k*Math.PI)*6;i?c.lineTo(xx,yy):c.moveTo(xx,yy);}c.strokeStyle=k?'#81e0edaa':'#c6a4ecaa';c.lineWidth=1.1;c.stroke();}
-   for(const e of g.enemies.filter(e=>e.hp>0&&e.row===u.row&&e.x>u.x-20)){glow(c,e.x,y,23,'#e8ceff',.6);star(c,e.x,y,11,'#fff3dc',t*.3);}
+   for(const e of g.enemies.filter(e=>e.hp>0&&e.row===u.row&&(e.x-u.x)*dir>-20)){glow(c,e.x,y,23,'#e8ceff',.6);star(c,e.x,y,11,'#fff3dc',t*.3);}
   }c.restore();
  }
 }

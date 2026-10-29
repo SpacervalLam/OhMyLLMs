@@ -3,7 +3,7 @@ import {bindInputLock} from './input-lock.js';
 import { MODELS, LINEUP, CARD_HOTKEYS, MODEL_MAP, CEOS, CEO_MAP, ENEMY_COPY, COPY, NOTICES, localized } from './data.js';
 import {enemyGuide} from './field-guide.js';
 import {starsOf,rankText,skillDescription,harnessDescription,HARNESSES,harnessOptions,stackDescription,harnessCost} from './ranks.js';
-import { GardenGame, FIELD } from './engine.js';
+import { GardenGame, FIELD, canFace } from './engine.js';
 import { GardenRenderer, loadArtwork } from './renderer.js';
 import {ELON_SKILLS} from './elon-data.js';
 import {APP_VERSION} from './version.js';
@@ -186,7 +186,11 @@ function showHarnessShop(u){
  openModal(`<div class="settings-heading"><div class="settings-emblem">${icon('bolt',24)}</div><div><span class="settings-eyebrow">${m.name} ★★★</span><h2 id="modal-title">${escapeHtml(title)}</h2></div><button class="icon-btn modal-close" aria-label="${t().close}">${icon('cross',18)}</button></div><p class="modal-intro">${escapeHtml(intro)}</p>${options.length>1?multiple():single(options[0])}`);
  modal.querySelectorAll('.harness-purchase').forEach(el=>el.addEventListener('click',()=>{const result=game.equipHarness(u,el.dataset.harness||undefined);if(result.ok){modal.close();processEvents();updateHUD(true);}else showHarnessShop(u);}));
 }
-function deployAt(tile,model=selected){
+function spendText(model,u){
+ const cost=game.presidentMode?0:MODEL_MAP[model].cost;
+ return `${stackDescription(u,lang)}${cost?` · ${rankText(lang).spend.replace('{cost}',cost)}`:''}`;
+}
+function deployAt(tile,model=selected,{autoStack=false}={}){
  if(game.controlsLocked)return;
  const occupant=game.units.find(u=>u.row===tile.row&&u.col===tile.col);
  if(model!=='shovel'&&occupant&&starsOf(occupant)===3){
@@ -194,18 +198,23 @@ function deployAt(tile,model=selected){
   return;
  }
 
- if(!model){toast(t().empty);return;}
- const result=model==='shovel'?game.remove(tile.row,tile.col):game.plant(model,tile.row,tile.col);
+ // 点击场上未满星的棋子，就是再投一枚她自己的模型：占位上本来也只能叠同名，
+ // 所以不必回头选中那张卡。拖卡投放仍按手里的模型结算，autoStack 只由棋盘点击打开。
+ const stack=autoStack&&!!occupant&&model!=='shovel';
+ if(!model&&!stack){toast(t().empty);return;}
+ const target=stack?occupant.model:model;
+ const result=stack?game.stack(tile.row,tile.col):model==='shovel'?game.remove(tile.row,tile.col):game.plant(model,tile.row,tile.col);
  if(!result.ok){
-  const notice=model!=='shovel'?NOTICES[model]:null;
+  const notice=target!=='shovel'?NOTICES[target]:null;
   const title=notice&&(result.reason==='lackTokens'||result.reason==='cooldown')
    ?localized(result.reason==='lackTokens'?notice.quota:notice.rateLimit,lang)
    :result.reason==='maxStars'?rankText(lang).maxStars:t()[result.reason];
   const extra=result.reason==='lackTokens'
-   ?t().lackTokensHint.replace('{available}',game.tokens).replace('{required}',MODEL_MAP[model]?.cost??0)
-   :result.reason==='cooldown'?t().cooldownHint.replace('{seconds}',Math.ceil(game.cooldowns[model]||0)):'';
+   ?t().lackTokensHint.replace('{available}',game.tokens).replace('{required}',MODEL_MAP[target]?.cost??0)
+   :result.reason==='cooldown'?t().cooldownHint.replace('{seconds}',Math.ceil(game.cooldowns[target]||0)):'';
   toast(title,true,extra);playSound('strike');
  }else if(model==='shovel')toast(t().removed);
+ else if(stack&&!result.upgraded)toast(`${MODEL_MAP[target].name} ${'★'.repeat(starsOf(result.unit))}`,false,spendText(target,result.unit));
  processEvents();updateHUD(true);
 }
 function bindCanvas(){
@@ -217,7 +226,8 @@ function bindCanvas(){
   renderer.hover=cell(p);
   const coin=game.coins.find(c=>Math.hypot(c.x-p.x,c.y-p.y)<27);
   if(coin){game.collect(coin.id);processEvents();updateHUD(true);canvas.style.cursor='default';return;}
-  canvas.style.cursor=renderer.hover?'crosshair':'default';
+  const unit=renderer.hover&&game.units.find(u=>u.row===renderer.hover.row&&u.col===renderer.hover.col);
+  canvas.style.cursor=renderer.hover?(unit?'pointer':'crosshair'):'default';
  });
  canvas.addEventListener('pointerleave',()=>{renderer.hover=null;});
  canvas.addEventListener('pointerdown',e=>{
@@ -225,9 +235,17 @@ function bindCanvas(){
   const p=coords(e),coin=game.coins.find(c=>Math.hypot(c.x-p.x,c.y-p.y)<27);
   if(coin){game.collect(coin.id);processEvents();updateHUD(true);return;}
   const tile=cell(p);if(!tile)return;
-  deployAt(tile);
+  deployAt(tile,selected,{autoStack:true});
  });
- canvas.addEventListener('contextmenu',e=>{e.preventDefault();selectModel(null);});
+ canvas.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const tile=cell(coords(e));
+  const occupant=tile&&game.units.find(u=>u.row===tile.row&&u.col===tile.col&&u.hp>0);
+  // 右键只在一个场合改变含义：指向一位能回头的棋子。其余位置右键仍然是取消选择，
+  // 免得新开关抢走原本的退出动作。
+  if(occupant&&canFace(occupant)&&game.flipFacing(tile.row,tile.col).ok){playSound('click');processEvents();updateHUD();return;}
+  selectModel(null);
+ });
 }
 function selectModel(id){
  if(game.controlsLocked)return;
@@ -240,9 +258,10 @@ let lastSelectionKey='';
 function updateSelectionNote(){
  const note=document.getElementById('selection-note');if(!note)return;
  const hover=renderer?.hover,u=hover&&game.units.find(u=>u.row===hover.row&&u.col===hover.col),m=MODEL_MAP[u?.model||selected],stars=u?starsOf(u):1;
- const h=u&&game.harnessFor(u),key=[selected,u?.id,u?.copies,stars,h?.stars,h?.variant,lang].join('|');
+ const h=u&&game.harnessFor(u),key=[selected,u?.id,u?.copies,stars,h?.stars,h?.variant,lang,u?.facing].join('|');
  if(lastSelectionKey===key&&note.innerHTML)return;lastSelectionKey=key;
- note.innerHTML=m?`<strong>${m.name} <em>${'★'.repeat(stars)}</em></strong><span>${escapeHtml(skillDescription(m,stars,lang))}${u?` · ${escapeHtml(stackDescription(u,lang))}`:''}${h?` · ${escapeHtml(harnessDescription(h.model,h.stars,lang,h.variant))}`:u&&stars===3?` · ${lang==='zh'?'点击棋子装备':lang==='ja'?'クリックして装備':'Click unit to equip'} Harness · ${harnessCost(m)} Token`:''}</span>`:`<span>${selected==='shovel'?rankText(lang).refund:rankText(lang).empty}</span>`;
+ const flip=u&&(u.facing??1)<0?` · ${t().flipLeft}`:u&&canFace(u)?` · ${t().flipHint}`:'';
+ note.innerHTML=m?`<strong>${m.name} <em>${'★'.repeat(stars)}</em></strong><span>${escapeHtml(skillDescription(m,stars,lang))}${u?` · ${escapeHtml(stackDescription(u,lang))}`:''}${u&&stars<3?` · ${escapeHtml(rankText(lang).stackHint.replace('{cost}',m.cost))}`:''}${h?` · ${escapeHtml(harnessDescription(h.model,h.stars,lang,h.variant))}`:u&&stars===3?` · ${lang==='zh'?'点击棋子装备':lang==='ja'?'クリックして装備':'Click unit to equip'} Harness · ${harnessCost(m)} Token`:''}${flip}</span>`:`<span>${selected==='shovel'?rankText(lang).refund:rankText(lang).empty}</span>`;
 }
 function mainAction(){
  if(!ready||game.controlsLocked)return;
@@ -307,8 +326,8 @@ function updateHUD(force=false){
 function processEvents(){
  const previousBest=bestScore;
  for(const e of game.drainEvents()){
-  if(['plant','collect','shoot','wave','kill','mower','win','lose'].includes(e.type))playSound(e.type);
-  if(e.type==='upgrade'){toast(`${MODEL_MAP[e.model].name} ${'★'.repeat(e.stars)}`,false,e.stars===3?`${rankText(lang).harness} · ${harnessCost(MODEL_MAP[e.model])} Token`:'');playSound('plant');}
+  if(['plant','merge','collect','shoot','wave','kill','mower','win','lose'].includes(e.type))playSound(e.type==='merge'?'plant':e.type);
+  if(e.type==='upgrade'){toast(`${MODEL_MAP[e.model].name} ${'★'.repeat(e.stars)}`,false,e.stars===3?`${rankText(lang).harness} · ${harnessCost(MODEL_MAP[e.model])} Token`:e.cost?rankText(lang).spend.replace('{cost}',e.cost):'');playSound('plant');}
   if(e.type==='equipHarness'){toast(`${MODEL_MAP[e.model].name} · ${e.name||HARNESSES[e.model].name}`,false,harnessDescription(e.model,3,lang,e.variant));playSound('plant');}
   if(e.type==='strike'){toast(t().strike,true,t().strikeHint);playSound('strike');}
   if(e.type==='resumeClaude')toast(t().backToWork);

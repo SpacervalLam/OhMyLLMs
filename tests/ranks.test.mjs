@@ -30,6 +30,18 @@ test('failed wrong-model, quota, cooldown and paused merges are atomic',()=>{
  g.pause();before=JSON.stringify([g.tokens,u,g.cooldowns]);assert.equal(g.plant('deepseek',2,0).reason,'notPlaying');assert.equal(JSON.stringify([g.tokens,u,g.cooldowns]),before);
 });
 
+test('board stacking charges the occupant’s own model, whatever card is selected',()=>{
+ const g=scene(),u=put(g,'kimi',1),kimi=MODELS.find(m=>m.id==='kimi');
+ const start=g.tokens;assert.equal(g.stack(2,0).ok,true);
+ assert.equal(u.model,'kimi');assert.equal(u.copies,2);assert.equal(u.stars,1);assert.equal(g.tokens,start-kimi.cost);
+ assert.equal(g.stack(0,0).reason,'empty');
+ put(g,'grok',3,1,1);const snapshot=JSON.stringify([g.tokens,g.units,g.cooldowns]);
+ assert.equal(g.stack(1,1).reason,'maxStars');assert.equal(JSON.stringify([g.tokens,g.units,g.cooldowns]),snapshot);
+ battle(g);assert.equal(g.stack(2,0).ok,true);assert.equal(u.stars,2);assert.equal(g.cooldowns.kimi,kimi.cooldown);
+ const throttled=JSON.stringify([g.tokens,u.copies,u.stars]);assert.equal(g.stack(2,0).reason,'cooldown');assert.equal(JSON.stringify([g.tokens,u.copies,u.stars]),throttled);
+ g.pause();assert.equal(g.stack(2,0).reason,'notPlaying');
+});
+
 test('promotion preserves health fraction, raises the cap, and refunds every paid copy once',()=>{
  const g=scene(),start=g.tokens,u=put(g,'qwen');u.hp=u.maxHp/2;
  g.plant('qwen',2,0);g.plant('qwen',2,0);assert.equal(u.maxHp,1170);assert.equal(u.hp,585);

@@ -23,11 +23,11 @@ test('every shipped raster asset is used by the renderer or field guide, and all
  assert.equal(fileCount,expected.size+5);
 });
 
-test('package, game UI, Windows executable and manifest consistently use release version 1.0.0',()=>{
+test('package, game UI, Windows executable and manifest consistently use release version 1.0.1',()=>{
  const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
  const project=readFileSync(new URL('../desktop/OhMyLLMs.csproj',import.meta.url),'utf8');
  const manifest=readFileSync(new URL('../desktop/app.manifest',import.meta.url),'utf8');
- assert.equal(pkg.version,'1.0.0');assert.equal(APP_VERSION,pkg.version);
- assert.match(project,/<Version>1\.0\.0<\/Version>/);assert.match(project,/<FileVersion>1\.0\.0\.0<\/FileVersion>/);assert.match(project,/<InformationalVersion>1\.0\.0<\/InformationalVersion>/);
- assert.match(manifest,/assemblyIdentity version="1\.0\.0\.0"/);
+ assert.equal(pkg.version,'1.0.1');assert.equal(APP_VERSION,pkg.version);
+ assert.match(project,/<Version>1\.0\.1<\/Version>/);assert.match(project,/<FileVersion>1\.0\.1\.0<\/FileVersion>/);assert.match(project,/<InformationalVersion>1\.0\.1<\/InformationalVersion>/);
+ assert.match(manifest,/assemblyIdentity version="1\.0\.1\.0"/);
 });

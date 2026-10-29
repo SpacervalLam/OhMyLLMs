@@ -41,9 +41,9 @@ export const HARNESS_OPTIONS=Object.freeze({
 });
 export const harnessOptions=model=>HARNESS_OPTIONS[model.id]??[HARNESSES[model.id]];
 export const RANK_COPY={
- zh:{maxStars:'已经是三星棋子。',merge:'同名合成',upgrade:'升星',basic:'一星 · 仅普通攻击',weak:'二星 · 弱化技能',full:'三星 · 完整技能',hint:'同格叠加同名棋子：1 + 2 → ★★，再 + 4 → ★★★',progress:'下阶进度',harness:'Harness',empty:'选择模型，在同名棋子上叠加升星。',refund:'铲除返还该棋子全部投入费用的 50%；Harness 随棋子退场移除。'},
- en:{maxStars:'This unit is already three stars.',merge:'Merged',upgrade:'Rank up',basic:'1★ · Basic attack only',weak:'2★ · Lesser skill',full:'3★ · Full skill',hint:'Stack the same model on one tile: 1 + 2 → ★★, then + 4 → ★★★',progress:'Next rank',harness:'Harness',empty:'Select a model and stack copies on its tile to rank up.',refund:'Removing refunds 50% of all copies invested; its Harness is removed.'},
- ja:{maxStars:'すでに三つ星です。',merge:'同名合成',upgrade:'星アップ',basic:'1★ · 通常攻撃のみ',weak:'2★ · 弱化スキル',full:'3★ · 完全スキル',hint:'同じマスに同名を重ねる：1 + 2 → ★★、さらに + 4 → ★★★',progress:'次の星',harness:'Harness',empty:'同名モデルを同じマスに重ねて星を上げます。',refund:'撤去は投入した全コストの50%を返却。退場時にHarnessも消えます。'}
+ zh:{maxStars:'已经是三星棋子。',merge:'同名合成',upgrade:'升星',basic:'一星 · 仅普通攻击',weak:'二星 · 弱化技能',full:'三星 · 完整技能',hint:'点击同名棋子即可叠加：1 + 2 → ★★，再 + 4 → ★★★',stackHint:'点击叠加 · {cost} Token',spend:'−{cost} Token',progress:'下阶进度',harness:'Harness',empty:'选择模型，在同名棋子上叠加升星。',refund:'铲除返还该棋子全部投入费用的 50%；Harness 随棋子退场移除。'},
+ en:{maxStars:'This unit is already three stars.',merge:'Merged',upgrade:'Rank up',basic:'1★ · Basic attack only',weak:'2★ · Lesser skill',full:'3★ · Full skill',hint:'Click a unit to stack the same model: 1 + 2 → ★★, then + 4 → ★★★',stackHint:'Click to stack · {cost} Tokens',spend:'−{cost} Tokens',progress:'Next rank',harness:'Harness',empty:'Select a model and stack copies on its tile to rank up.',refund:'Removing refunds 50% of all copies invested; its Harness is removed.'},
+ ja:{maxStars:'すでに三つ星です。',merge:'同名合成',upgrade:'星アップ',basic:'1★ · 通常攻撃のみ',weak:'2★ · 弱化スキル',full:'3★ · 完全スキル',hint:'同じモデルの駒をクリックで重ねる：1 + 2 → ★★、さらに + 4 → ★★★',stackHint:'クリックで重ねる · {cost}トークン',spend:'−{cost}トークン',progress:'次の星',harness:'Harness',empty:'同名モデルを同じマスに重ねて星を上げます。',refund:'撤去は投入した全コストの50%を返却。退場時にHarnessも消えます。'}
 };
 export const rankText=(lang)=>RANK_COPY[lang]||RANK_COPY.en;
 

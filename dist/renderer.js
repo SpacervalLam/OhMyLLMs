@@ -107,13 +107,19 @@ export class GardenRenderer{
  sprite(kind,index,x,y,size,bob=0,opacity=1,actor=null){
   const id=kind==='models'?MODELS[index].id:CEOS[index].id;
   const atlas=characterAtlas(this.art,id,actor);
-  const mirrored=kind==='models'&&['doubao','mimo'].includes(id)||kind==='ceos'&&id==='military_claude';
+  // 两张面板本身就是朝左画的，先翻正再叠加朝向：翻转是两次取反，不是一次。
+  const drawnLeft=kind==='models'&&['doubao','mimo'].includes(id)||kind==='ceos'&&id==='military_claude';
+  const turned=kind==='models'&&(actor?.facing??1)<0;
+  const mirrored=drawnLeft!==turned;
   if(mirrored){this.ctx.save();this.ctx.translate(x*2,0);this.ctx.scale(-1,1);}
   const drawn=drawAtlasSprite(this.ctx,atlas,actor?.animation||{state:'idle',time:this.animationTime||0},x,y,size,{opacity,reduced:this.reduced});
-  if(mirrored)this.ctx.restore();if(drawn)return;
-  const img=this.art[kind],rect=this.rects[kind]?.[index],ctx=this.ctx;if(!img||!rect){ellipse(ctx,x,y,20,25,kind==='models'?'#8ba3ac':'#bd957d');return;}
+  if(drawn){if(mirrored)this.ctx.restore();return;}
+  // The static fallback sits inside the same transform, so a turned unit still
+  // reads as turned when its animation sheet is missing.
+  const img=this.art[kind],rect=this.rects[kind]?.[index],ctx=this.ctx;if(!img||!rect){if(mirrored)this.ctx.restore();ellipse(ctx,x,y,20,25,kind==='models'?'#8ba3ac':'#bd957d');return;}
   const scale=Math.min(size/rect.h,size*1.05/rect.w),w=rect.w*scale,h=rect.h*scale;
   ctx.save();ctx.globalAlpha=opacity;ctx.drawImage(img,rect.x,rect.y,rect.w,rect.h,x-w/2,y-h+bob,w,h);ctx.restore();
+  if(mirrored)this.ctx.restore();
  }
  bar(x,y,hp,max,color='#6d965a',extra=0){
   const ctx=this.ctx,w=46;rounded(ctx,x-w/2,y,w,4,2,'#45613126');rounded(ctx,x-w/2,y,w*Math.max(0,hp/max),4,2,color);
@@ -214,6 +220,8 @@ export class GardenRenderer{
     // can brighten the whole frame on some GPUs, and the drawn attack/hurt pose
     // already says what happened; the tint was never worth a full-screen flash.
     else this.sprite('models',m.index,v.x,v.y+26,88,0,1,v);
+    // 默认朝向是全体共有的，所以只给回头的那一位留记号：脚下一块朝左的喙标。
+    if((v.facing??1)<0)this.facingMark(ctx,v,m.color);
     // Bell stun: a small gold bell and orbiting notes mark a silenced model.
     if(v.stun>0){ctx.save();ctx.globalAlpha=.9;ctx.strokeStyle='#e2c073';ctx.lineWidth=1.2;
      ctx.beginPath();ctx.arc(v.x,v.y-54,12,0,TAU);ctx.stroke();
@@ -259,6 +267,17 @@ export class GardenRenderer{
    const w=ctx.measureText(text).width+20,x=Math.max(102+w/2,Math.min(998-w/2,hovered.x)),y=hovered.y-70;
    rounded(ctx,x-w/2,y,w,23,7,'#fffdf3f2','#b2bd9d');label(ctx,text,x,y+15,11,'#596a4d','center');ctx.restore();
   }
+ }
+ // A turned model gets two small chevrons on the lawn at its feet, pointing the
+ // way it now covers. Only the exception is marked, so a default board stays clean.
+ facingMark(ctx,v,color){
+  const y=v.y+42;
+  ctx.save();ctx.globalAlpha=.95;
+  for(const [offset,alpha] of [[0,.95],[-11,.45]]){
+   ctx.beginPath();ctx.moveTo(v.x-30+offset,y);ctx.lineTo(v.x-20+offset,y-5);ctx.lineTo(v.x-20+offset,y+5);ctx.closePath();
+   ctx.fillStyle=color;ctx.globalAlpha=alpha;ctx.fill();
+  }
+  ctx.restore();
  }
  mower(x,y,moving){
   const ctx=this.ctx;ctx.save();
@@ -377,6 +396,16 @@ export class GardenRenderer{
    line(ctx,f.x-6+dx,f.y,f.x+13+dx,f.y,'#ffd2ab',3);
    ctx.beginPath();ctx.moveTo(f.x+9+dx,f.y-5);ctx.lineTo(f.x+18+dx,f.y);ctx.lineTo(f.x+9+dx,f.y+5);ctx.closePath();ctx.fillStyle='#ffd2ab';ctx.fill();
    for(let i=0;i<3;i++)line(ctx,f.x-16+i*6+dx*.5,f.y-8+i*8,f.x-8+i*6+dx*.5,f.y-8+i*8,'#ffd2ab8a',1.5);
+  }
+  else if(f.type==='flip'){
+   // 一次方向事件：两道喙形弧线朝新的朝向扫出去。
+   const s=f.text==='◀'?-1:1;
+   for(let i=0;i<2;i++){
+    const d=11+p*30+i*11;
+    ctx.beginPath();ctx.moveTo(f.x+s*(d-9),f.y-9);ctx.lineTo(f.x+s*d,f.y);ctx.lineTo(f.x+s*(d-9),f.y+9);
+    ctx.strokeStyle=f.color;ctx.lineWidth=2.4;ctx.stroke();
+   }
+   ctx.restore();return;
   }
   else if(f.type==='linkline'){
    line(ctx,f.ax,f.ay,f.bx,f.by,'#d9c8f8',2.8*(1-p)+.8);

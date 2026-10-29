@@ -31,6 +31,14 @@ export const MINIMAX_REWIND=Object.freeze({speed:700,out:1,back:.7,rowFalloff:.6
 export const CONTRACT=Object.freeze({cooldown:200,scale:.5});
 export const PONY_RAID=Object.freeze({warning:3,steal:8,descent:.45});
 export const enemyTargetable=e=>e.hp>0&&!e.retreat&&!e.withdrawn&&e.raid?.phase!=='warning';
+// 朝向只对两星以上的攻击位开放。一星只有普攻、生产者与治疗位本来就没有「前方」
+// 可打，给它们一个方向开关只会多出一个看不懂的按钮。
+export const canFace=u=>!!u&&!u.allied&&starsOf(u)>1&&MODEL_MAP[u.model]?.verb==='attack';
+export const facingOf=u=>u?.facing??1;
+// 「前方」只在这里定义一次。攻击、激光、契约、普攻列表都从这里取方向，
+// 不再各自假设敌人一定站在右边——那正是后排被空降时什么都打不到的原因。
+export const aheadOf=u=>e=>enemyTargetable(e)&&(e.x-u.x)*facingOf(u)>-20;
+const nearFirst=dir=>(a,b)=>(a.x-b.x)*dir;
 
 
 const WAVE_TYPES = [
@@ -74,7 +82,7 @@ export class GardenGame {
   this.monopolyRemaining=0;this.systemPaused=false;this.dividends=[];this.airstrikes=[];this.militaryWrits=[];
   this.elonOrders=[];this.elonTrails=[];this.elonLimits=[];this.elonIntel={damage:[],attacks:[]};
   if(starter)for(const [model,row,col] of [['deepseek',2,0],['chatgpt',2,2],['qwen',2,5]]){
-   const m=MODEL_MAP[model];this.units.push({id:this.nextId++,model,row,col,x:FIELD.x+col*100+50,y:FIELD.y+row*96+48,hp:m.hp,maxHp:m.hp,stars:1,copies:1,invested:0,age:0,attackTimer:.5,produceTimer:m.period,shots:0,strike:false,stun:0,flash:0});
+   const m=MODEL_MAP[model];this.units.push({id:this.nextId++,model,row,col,x:FIELD.x+col*100+50,y:FIELD.y+row*96+48,hp:m.hp,maxHp:m.hp,stars:1,copies:1,invested:0,age:0,attackTimer:.5,produceTimer:m.period,shots:0,strike:false,stun:0,flash:0,facing:1});
   }
  }
  random(){this.seed=(this.seed*1664525+1013904223)>>>0;return this.seed/4294967296;}
@@ -116,14 +124,36 @@ export class GardenGame {
     const hp=existing.hp/existing.maxHp;existing.maxHp=Math.round(m.hp*([0,1,1.8,3][after]));existing.hp=Math.max(1,Math.round(existing.maxHp*hp));
     existing.produceTimer=Math.min(existing.produceTimer??m.period,m.period);existing.attackTimer=.35;
     this.effect(existing.x,existing.y,'rankUp',m.color,String(after),1.25);
-    this.emit('upgrade',{model,unit:existing.id,stars:after,row,col});this.refreshStrikes();
+    this.emit('upgrade',{model,unit:existing.id,stars:after,row,col,cost:this.presidentMode?0:m.cost});this.refreshStrikes();
    }else this.effect(existing.x,existing.y,'merge',m.color,'',.55);
    this.emit('merge',{model,unit:existing.id,copies:existing.copies,stars:after});addTrendHeat(this,row);
    return {ok:true,unit:existing,merged:true,upgraded:after>before};
   }
-  const u={id:this.nextId++,model,row,col,x:FIELD.x+col*100+50,y:FIELD.y+row*96+48,hp:m.hp,maxHp:m.hp,stars:1,copies:1,invested:this.presidentMode?0:m.cost,age:0,attackTimer:0.5,produceTimer:m.period,shots:0,strike:false,stun:0,flash:0};
+  const u={id:this.nextId++,model,row,col,x:FIELD.x+col*100+50,y:FIELD.y+row*96+48,hp:m.hp,maxHp:m.hp,stars:1,copies:1,invested:this.presidentMode?0:m.cost,age:0,attackTimer:0.5,produceTimer:m.period,shots:0,strike:false,stun:0,flash:0,facing:1};
   this.units.push(u);this.emit('plant',{unit:u.id,model,row,col});this.effect(u.x,u.y,'plant',m.color);addTrendHeat(this,row);
   return {ok:true,unit:u};
+ }
+ // A tile can only ever hold one model, so clicking an occupied tile means one
+ // more paid copy of that model — no need to look at which card is selected.
+ stack(row,col){
+  const existing=this.units.find(u=>u.row===row&&u.col===col);
+  if(!existing)return {ok:false,reason:'empty'};
+  return this.plant(existing.model,row,col);
+ }
+ // 回头不是外观开关：它真的把这位模型的前方换到另一边。所以它是「谁来补身后的
+ // 漏怪与空降」这个问题的答案，代价是正面少一位火力。
+ flipFacing(row,col){
+  if(this.controlsLocked)return {ok:false,reason:'monopoly'};
+  if(!['ready','playing','paused'].includes(this.phase))return {ok:false,reason:'notPlaying'};
+  const u=this.units.find(u=>u.row===row&&u.col===col&&u.hp>0);
+  if(!u)return {ok:false,reason:'empty'};
+  if(!canFace(u))return {ok:false,reason:starsOf(u)>1?'noAttack':'requiresTwoStars'};
+  u.facing=-facingOf(u);
+  // 换向立即生效一次，否则转身后还要等完上一个冷却周期才开火。
+  u.attackTimer=Math.min(u.attackTimer??0,.2);u.basicTimer=Math.min(u.basicTimer??0,.2);
+  this.effect(u.x,u.y-38,'flip',MODEL_MAP[u.model].color,u.facing<0?'◀':'▶',.5);
+  this.emit('flipFacing',{unit:u.id,model:u.model,row,col,facing:u.facing});
+  return {ok:true,facing:u.facing};
  }
  remove(row,col){
   if(this.controlsLocked)return {ok:false,reason:'monopoly'};
@@ -495,7 +525,7 @@ export class GardenGame {
  depart(actor,kind,{abducted=false}={}){if(kind==='unit'){
   if(!abducted&&actor.model==='grok'&&!actor.deathrattleUsed&&this.harnesses.some(h=>h.unitId===actor.id)){
    actor.deathrattleUsed=true;
-   this.projectiles.push({id:this.nextId++,sourceId:actor.id,model:'grok',deathrattle:true,basic:false,stars:3,x:actor.x,y:actor.y-14,originX:actor.x,row:actor.row,targetY:actor.y-14,vx:650,hit:[],delay:0,age:0,color:'#e4b58f'});
+   this.projectiles.push({id:this.nextId++,sourceId:actor.id,model:'grok',deathrattle:true,basic:false,stars:3,x:actor.x,y:actor.y-14,originX:actor.x,row:actor.row,targetY:actor.y-14,vx:650*facingOf(actor),hit:[],delay:0,age:0,color:'#e4b58f'});
   }
   this.harnesses=this.harnesses.filter(h=>h.unitId!==actor.id);this.effects=this.effects.filter(f=>!(f.type==='codexStop'&&f.x===actor.x&&f.y===actor.y));if(this.timeStopUnit===actor.id){this.timeStop=0;this.timeStopUnit=null;}}
   if(abducted)return;
@@ -505,8 +535,11 @@ export class GardenGame {
   if(u.model==='deepseek'||u.model==='kimi')return false;
   const m=MODEL_MAP[u.model];
   if(basic)recordElonAttack(this,u);
-  const x=target.raid?.phase==='landed'&&target.row===u.row&&Math.abs(target.x-u.x)<30?target.x-12:u.x+27;
-  this.projectiles.push({id:this.nextId++,sourceId:u.id,model:u.model,basic,stars:starsOf(u),x,y:u.y-14,targetY:target.y-14,row:target.row,vx:basic?BASIC_ATTACKS[u.model].speed:u.model==='mimo'?560:340,damage:damage??m.damage,splash,knock,stun,star,link,chain,pierce,replay,hit:[],delay,targetId:target.id,age:0,color:m.color,resolved:false});
+  const dir=facingOf(u);
+  // 出手点与弹道速度都跟着朝向走。打在同一个格子上的空降目标必须从远侧出手，
+  // 否则弹丸一生成就已经站在它另一边，一整局都打不到。
+  const x=target.raid?.phase==='landed'&&target.row===u.row&&Math.abs(target.x-u.x)<30?target.x-12*dir:u.x+27*dir;
+  this.projectiles.push({id:this.nextId++,sourceId:u.id,model:u.model,basic,stars:starsOf(u),x,y:u.y-14,targetY:target.y-14,row:target.row,vx:(basic?BASIC_ATTACKS[u.model].speed:u.model==='mimo'?560:340)*dir,damage:damage??m.damage,splash,knock,stun,star,link,chain,pierce,replay,hit:[],delay,targetId:target.id,age:0,color:m.color,resolved:false});
   if(silent)return true;
   u.flash=.2;playAnimation(u,'attack');this.emit('shoot',{model:u.model});
   if(!basic)this.skillEffect(u.model,u.x+15,u.y-18);
@@ -515,12 +548,12 @@ export class GardenGame {
  attack(u){
   if(u.model==='deepseek'||u.model==='kimi')return false;
   if(u.model==='qwen')return this.basicAttack(u,[]);
-  const inFront=e=>enemyTargetable(e)&&e.x>u.x-20;
-  const lane=this.enemies.filter(e=>e.row===u.row&&inFront(e)).sort((a,b)=>a.x-b.x);
+  const inFront=aheadOf(u),dir=facingOf(u);
+  const lane=this.enemies.filter(e=>e.row===u.row&&inFront(e)).sort(nearFirst(dir));
   if(starsOf(u)===1)return this.basicAttack(u,lane);
   const power=skillScale(u);
   if(u.model==='gemini'){
-   const candidates=this.enemies.filter(e=>Math.abs(e.row-u.row)<=1&&inFront(e)).sort((a,b)=>a.x-b.x);
+   const candidates=this.enemies.filter(e=>Math.abs(e.row-u.row)<=1&&inFront(e)).sort(nearFirst(dir));
    const first=candidates[0],second=first&&(candidates.find(e=>e.row!==first.row)||candidates.find(e=>e.id!==first.id));
    const targets=[first,second].filter(Boolean);
    if(targets.length){const link=this.nextId++;this.links[link]={points:[],expected:targets.length,ttl:4};for(const e of targets)this.fire(u,e,{star:true,link,damage:MODEL_MAP[u.model].damage*power});}
@@ -564,7 +597,7 @@ export class GardenGame {
   while(b.tick<=0&&b.fire>0){
    b.tick+=.12;
    for(const e of this.enemies){
-    if(enemyTargetable(e)&&e.row===u.row&&e.x>u.x-20){this.damageEnemy(e,b.damage??4,{sourceId:u.id});this.effect(e.x,e.y-12,'hit','#e6dcff','',.18);}
+    if(e.row===u.row&&aheadOf(u)(e)){this.damageEnemy(e,b.damage??4,{sourceId:u.id});this.effect(e.x,e.y-12,'hit','#e6dcff','',.18);}
    }
   }
   if(b.fire<=0)u.beam=null;
@@ -588,7 +621,7 @@ export class GardenGame {
   }
   for(const e of this.enemies){
    if(e.hp<=0)continue;
-   const hit=enemyTargetable(e)&&sources.some(u=>u.beam.charge<=0&&u.beam.fire>0&&e.row===u.row&&e.x>u.x-20);
+   const hit=sources.some(u=>u.beam.charge<=0&&u.beam.fire>0&&e.row===u.row&&aheadOf(u)(e));
    if(hit){e.beamHit=true;e.animation={state:'hurt',time:2.1/15};}
    else if(e.beamHit){
     e.beamHit=false;
@@ -600,7 +633,7 @@ export class GardenGame {
  // Claude locks a local group into individual contracts, then resolves one verdict.
  sweep(u,lane){
   const anchor=lane[0],radius=starsOf(u)===3?125:85,maxHits=starsOf(u)===3?Infinity:2;
-  const targets=this.enemies.filter(e=>enemyTargetable(e)&&e.x>u.x-20&&Math.hypot(e.x-anchor.x,e.y-anchor.y)<=radius).sort((a,b)=>Math.hypot(a.x-anchor.x,a.y-anchor.y)-Math.hypot(b.x-anchor.x,b.y-anchor.y)).slice(0,maxHits);
+  const targets=this.enemies.filter(e=>aheadOf(u)(e)&&Math.hypot(e.x-anchor.x,e.y-anchor.y)<=radius).sort((a,b)=>Math.hypot(a.x-anchor.x,a.y-anchor.y)-Math.hypot(b.x-anchor.x,b.y-anchor.y)).slice(0,maxHits);
   this.sweeps.push({id:this.nextId++,unitId:u.id,row:u.row,stars:starsOf(u),damage:45*skillScale(u),maxHits,strip:starsOf(u)===3,convert:!!this.harnessFor(u),hit:[],marks:targets.map(e=>({id:e.id,x:e.x,y:e.y})),age:0,writ:.65,resolved:false,radius});
   this.skillEffect('claude',u.x+12,u.y-14);
   u.flash=.2;playAnimation(u,'attack');this.emit('shoot',{model:u.model});
@@ -705,8 +738,10 @@ export class GardenGame {
    this.damageEnemy(e,ticks*GROK_BURN.damage*MELT.scale,{direct:true,sourceId,sourceModel:'grok'});
   }
  }
- // Grok: shove the target down-lane; Elon's rocket gets blown off course.
- knockback(e,px){
+// Grok: shove the target down-lane; Elon's rocket gets blown off course.
+// 击退永远朝入口方向，与朝向无关：把已经越过防线的敌人推回右侧对玩家有利，
+// 若跟着朝向把它推向左，回头的那位反而会帮敌人推门。
+knockback(e,px){
   if(CEO_MAP[e.type].anchored||e.retreat)return false;
   if(e.raid&&e.raid.phase!=='waiting')return false;
   if(e.type==='elon')e.boost=0;
@@ -806,7 +841,7 @@ export class GardenGame {
    if(starsOf(u)===1&&!['deepseek','kimi'].includes(u.model)){u.attackTimer-=dt/basicIntervalScale(this,u);if(u.attackTimer<=0)u.attackTimer=this.attack(u)?BASIC_ATTACKS[u.model].period:.15;continue;}
    if(BASIC_ATTACKS[u.model].damage>0&&!(u.model==='chatgpt'&&starsOf(u)===2&&u.beam)){
    u.basicTimer=(u.basicTimer??.5)-dt/basicIntervalScale(this,u);
-   if(u.basicTimer<=0){const targets=this.enemies.filter(e=>enemyTargetable(e)&&e.row===u.row&&e.x>u.x-20).sort((a,b)=>a.x-b.x);u.basicTimer=this.basicAttack(u,targets)?BASIC_ATTACKS[u.model].period:.15;}
+   if(u.basicTimer<=0){const targets=this.enemies.filter(e=>e.row===u.row&&aheadOf(u)(e)).sort(nearFirst(facingOf(u)));u.basicTimer=this.basicAttack(u,targets)?BASIC_ATTACKS[u.model].period:.15;}
    }
    const harness=this.harnessFor(u);
    if(harness&&u.model==='chatgpt'){harness.timer-=dt;if(harness.timer<=0){harness.timer=10;this.resetQuota(u);}}
@@ -903,25 +938,28 @@ export class GardenGame {
    if(p.hostile){this.updateHostileShot(p,dt);continue;}
    if(p.rewind){this.updateRewind(p,dt);continue;}
    const previous=p.x;p.x+=p.vx*dt;p.y+=(p.targetY-p.y)*Math.min(1,dt*7);
+   // 弹丸现在可以往两侧飞，所以命中判定改成「这一帧扫过的区间」，
+   // 而不是假设它一定在向右推进。
+   const lo=Math.min(previous,p.x),hi=Math.max(previous,p.x),forward=p.vx<0?-1:1;
    if(p.deathrattle){
-    for(const e of this.enemies.filter(e=>enemyTargetable(e)&&Math.abs(e.row-p.row)<=1&&e.x>=p.originX&&e.x+25>=previous&&e.x-25<=p.x&&!p.hit.includes(e.id))){
+    for(const e of this.enemies.filter(e=>enemyTargetable(e)&&Math.abs(e.row-p.row)<=1&&(e.x-p.originX)*forward>=-25&&e.x+25>=lo&&e.x-25<=hi&&!p.hit.includes(e.id))){
      this.damageEnemy(e,Math.max(0,e.maxHp-e.hp),{sourceId:p.sourceId});p.hit.push(e.id);this.skillEffect('grok',e.x,e.y-12,'skillImpact',{radius:60});
     }
     continue;
    }
-   const targets=this.enemies.filter(e=>enemyTargetable(e)&&e.row===p.row&&!p.hit.includes(e.id)&&e.x+25>=previous&&e.x-25<=p.x).sort((a,b)=>a.x-b.x);
+   const targets=this.enemies.filter(e=>enemyTargetable(e)&&e.row===p.row&&!p.hit.includes(e.id)&&e.x+25>=lo&&e.x-25<=hi).sort(nearFirst(forward));
    for(const e of targets){
     let dmg=p.damage;if(!p.basic&&this.eggs&&p.model==='grok'&&['elon','elon_super'].includes(e.type))dmg*=1.4;
     this.damageEnemy(e,dmg,{sourceId:p.sourceId});p.hit.push(e.id);p.resolved=true;
     this.applyImpact(p,e);
-    if(!p.pierce||p.hit.length>=p.pierce){p.x=1300;break;}
+    if(!p.pierce||p.hit.length>=p.pierce){p.x=forward>0?1300:-1e5;break;}
    }
   }
   // A star that never lands must not strand its partner's link.
-  for(const p of this.projectiles)if(p.link&&!p.resolved&&p.x>=1200)delete this.links[p.link];
+  for(const p of this.projectiles)if(p.link&&!p.resolved&&(p.x>=1200||p.x<=-60))delete this.links[p.link];
   // The rewinding strip is culled by its own flag: it spends a frame at the right
   // edge and then lives entirely left of it, so an edge test would eat it mid-turn.
-  this.projectiles=this.projectiles.filter(p=>p.rewind?!p.done:(p.hostile?p.x>FIELD.x-80:p.x<1200));
+  this.projectiles=this.projectiles.filter(p=>p.rewind?!p.done:(p.hostile?p.x>FIELD.x-80:p.x<1200&&p.x>FIELD.x-160));
   // Statuses meet only after everything has landed this frame.
   this.meltFrozen();
   // Resolve the last frame's hits before an expired rope takes its victim.
